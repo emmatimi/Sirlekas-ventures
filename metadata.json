@@ -1,0 +1,8 @@
+
+{
+  "name": "Sirlekas Ventures | EKSU Digital Hub & CBT Center",
+  "description": "The official digital portal for Sirlekas Ventures at Ekiti State University. Providing professional Cyber Café services, NYSC registration, Graphics Design, and JAMB/GST CBT practice mock exams.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

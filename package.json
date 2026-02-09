@@ -1,0 +1,32 @@
+{
+  "name": "sirlekas-ventures-|-eksu-digital-hub-&-cbt-center",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@emailjs/browser": "^4.2.0",
+    "firebase": "^12.9.0",
+    "firebase-admin": "^13.6.1",
+    "firebase-functions": "^7.0.5",
+    "jwt-decode": "4.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "6.26.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.24",
+    "postcss": "^8.5.6",
+    "postcss-load-config": "^6.0.1",
+    "tailwindcss": "^4.1.18",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
