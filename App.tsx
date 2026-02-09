@@ -9,7 +9,7 @@ import StudentDashboard from './pages/StudentDashboard.tsx';
 import CBTTest from './pages/CBTTest.tsx';
 import AdminDashboard from './pages/AdminDashboard.tsx';
 import CGPACalculator from './pages/CGPACalculator.tsx';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './services/firebase.ts';
 
 const ScrollToTop = () => {
@@ -166,8 +166,8 @@ const App: React.FC = () => {
     };
   }, [isMobileMenuOpen]);
 
-  const handleLogout = () => {
-    dbService.logout();
+  const handleLogout = async () => {
+    await signOut(auth);
     setUser(null);
     setIsMobileMenuOpen(false);
     navigate('/');

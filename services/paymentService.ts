@@ -1,64 +1,104 @@
-
 import { db } from './firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 
 const INIT_ENDPOINT = '/api/monnify/init';
 const VERIFY_ENDPOINT = '/api/monnify/verify';
 
+interface InitPaymentResponse {
+  checkoutLink: string;
+  transactionReference: string;
+}
+
 export const paymentService = {
   /**
-   * Initializes a Monnify payment (via secure Cloud Function)
-   * The Cloud Function handles Monnify authentication server-side.
+   * Fund wallet via Monnify
    */
-  fundWallet: async (userId: string, amount: number, email: string) => {
+  fundWallet: async (
+    userId: string,
+    amount: number,
+    email: string
+  ) => {
     try {
       const resp = await fetch(INIT_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, examType: 'WALLET_FUND', subject: 'Wallet Funding', email, amount })
+        body: JSON.stringify({
+          userId,
+          examType: 'WALLET_FUND',
+          subject: 'Wallet Funding',
+          email,
+          amount
+        })
       });
-      if (!resp.ok) throw new Error('Init failed');
-      const result = await resp.json();
-      const { checkoutLink } = result;
 
-      // Store pending transaction for reference
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || 'Payment initialization failed');
+      }
+
+      const result: InitPaymentResponse = await resp.json();
+      const { checkoutLink, transactionReference } = result;
+
+      if (!checkoutLink || !transactionReference) {
+        throw new Error('Invalid payment initialization response');
+      }
+
+      // Store pending transaction
       await updateDoc(doc(db, 'users', userId), {
         pendingTransaction: {
-          reference: result.data.transactionReference,
+          reference: transactionReference,
           amount,
           type: 'WALLET_FUND',
           timestamp: Date.now()
         }
       });
 
-      // Redirect to Monnify checkout
-      if (checkoutLink) {
-        window.location.href = checkoutLink;
-      } else {
-        throw new Error('No checkout link received');
-      }
+      // Redirect to Monnify
+      window.location.href = checkoutLink;
+
     } catch (error) {
-      console.error('Payment Initialization Error:', error);
+      console.error('Wallet Funding Error:', error);
       throw error;
     }
   },
 
   /**
-   * Initializes a direct course payment (via secure Cloud Function)
+   * Direct course purchase via Monnify
    */
-  directCoursePurchase: async (userId: string, email: string, examType: string, subject: string) => {
+  directCoursePurchase: async (
+    userId: string,
+    email: string,
+    examType: string,
+    subject: string
+  ) => {
     try {
       const amount = 300;
+
       const resp = await fetch(INIT_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, examType, subject, email, amount })
+        body: JSON.stringify({
+          userId,
+          examType,
+          subject,
+          email,
+          amount
+        })
       });
-      if (!resp.ok) throw new Error('Init failed');
-      const result = await resp.json();
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || 'Payment initialization failed');
+      }
+
+      const result: InitPaymentResponse = await resp.json();
       const { checkoutLink, transactionReference } = result;
 
-      // Store pending transaction for reference
+      if (!checkoutLink || !transactionReference) {
+        throw new Error('Invalid payment initialization response');
+      }
+
+      // Store pending transaction
       await updateDoc(doc(db, 'users', userId), {
         pendingTransaction: {
           reference: transactionReference,
@@ -70,12 +110,9 @@ export const paymentService = {
         }
       });
 
-      // Redirect to Monnify checkout
-      if (checkoutLink) {
-        window.location.href = checkoutLink;
-      } else {
-        throw new Error('No checkout link received');
-      }
+      // Redirect to Monnify
+      window.location.href = checkoutLink;
+
     } catch (error) {
       console.error('Course Purchase Error:', error);
       throw error;
@@ -83,8 +120,7 @@ export const paymentService = {
   },
 
   /**
-   * Verify payment status (callback after redirect)
-   * Can be called from frontend after user returns from Monnify checkout
+   * Verify payment after redirect
    */
   verifyPayment: async (transactionReference: string) => {
     try {
@@ -93,8 +129,14 @@ export const paymentService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transactionReference })
       });
-      if (!resp.ok) throw new Error('Verify failed');
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || 'Payment verification failed');
+      }
+
       return await resp.json();
+
     } catch (error) {
       console.error('Payment Verification Error:', error);
       throw error;

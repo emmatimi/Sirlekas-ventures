@@ -59,30 +59,46 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
   useEffect(() => {
     const handlePaymentRedirect = async () => {
       const payment = searchParams.get('payment');
-      const ref = searchParams.get('ref');
+      const amount = Number(searchParams.get('amount'));
+      const userId = searchParams.get('userId');
+      const type = searchParams.get('type');
+      const ref = searchParams.get('ref') || 'N/A';
 
-      if (payment === 'success' && ref) {
+      if (payment === 'success' && userId === user.uid && amount) {
         try {
           setIsProcessing(true);
           
-          // Verify payment with server
-          const verification = await paymentService.verifyPayment(ref);
-
-          if (verification.verified) {
-            setSuccessMessage(`Payment verified! ${verification.examType === 'WALLET_FUND' ? 'Wallet funded.' : `${verification.subject} has been unlocked.`} Refreshing...`);
-          } else {
-            setError('Payment verification pending. Please refresh in a moment.');
+          if (type === 'WALLET_FUND') {
+            await dbService.addToWallet(user.uid, amount);
+            await emailService.sendPaymentReceipt({
+              to_name: user.name,
+              to_email: user.email,
+              transaction_type: 'WALLET_FUND',
+              amount: amount,
+              reference: ref
+            });
+            setSuccessMessage(`Wallet credited with ₦${amount}! A receipt has been sent to your email.`);
+          } else if (type === 'COURSE_UNLOCK') {
+            const examType = searchParams.get('examType') || '';
+            const subject = searchParams.get('subject') || '';
+            await dbService.purchaseCourse(user.uid, examType, subject, 0); // Cost 0 because they paid directly via gateway
+            await emailService.sendPaymentReceipt({
+              to_name: user.name,
+              to_email: user.email,
+              transaction_type: 'COURSE_UNLOCK',
+              amount: amount,
+              reference: ref,
+              item_name: `${subject} (${examType})`
+            });
+            setSuccessMessage(`${subject} has been unlocked successfully! Receipt sent to email.`);
           }
-
-          // Refresh user data (webhook should have updated it)
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          await refreshUser();
           
+          await refreshUser();
           setSearchParams({});
           setTimeout(() => setSuccessMessage(''), 8000);
         } catch (err) {
-          console.error("Payment verification failed:", err);
-          setError('Could not verify payment. Please refresh the page or contact support.');
+          console.error("Payment confirmation failed:", err);
+          setError('Payment confirmation failed. Please contact support with your reference.');
         } finally {
           setIsProcessing(false);
         }
@@ -120,7 +136,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     try {
       await paymentService.fundWallet(user.uid, fundAmount, user.email);
     } catch (err) {
-      setError("Failed to initialize payment. Please try again.");
+      setError("Monnify gateway unavailable. Check your internet connection.");
       setIsProcessing(false);
     }
   };
@@ -151,12 +167,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         setIsProcessing(false);
       }
     } else {
-      // Case 2: Direct Payment via Gateway (via secure Cloud Function)
+      // Case 2: Direct Payment via Gateway
       setIsProcessing(true);
       try {
         await paymentService.directCoursePurchase(user.uid, user.email, courseToUnlock.examType, courseToUnlock.subject);
       } catch (err) {
-        setError("Failed to initialize payment. Please try again.");
+        setError("Payment initialization failed.");
         setIsProcessing(false);
       }
     }

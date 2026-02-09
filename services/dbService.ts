@@ -33,7 +33,9 @@ const FALLBACK_QUOTES: InspirationalQuote[] = [
   { id: 'q1', text: "Excellence is not a destination, it's a continuous journey.", author: "Sirlekas Ventures" }
 ];
 
-const isFirebaseReady = () => !!db && (db as any).type !== 'mock';
+// Consider Firebase 'ready' when `db` exists and a Firebase API key is present.
+// This avoids attempting real Firestore ops when the app was initialized in a fallback mode.
+const isFirebaseReady = () => !!db && !!process.env.VITE_FIREBASE_API_KEY;
 
 export const dbService = {
   syncUser: async (firebaseUser: any, role: string = 'student'): Promise<User> => {
@@ -87,7 +89,9 @@ export const dbService = {
       name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
       email: fbUser.email || '',
       role: 'student',
+      avatar: fbUser.photoURL || '',
       walletBalance: 0,
+      purchasedCourses: [],
       createdAt: Date.now()
     };
   },
@@ -114,19 +118,28 @@ export const dbService = {
     if (!isFirebaseReady()) return;
     const userRef = doc(db, 'users', userId);
     const courseKey = `${examType}-${subject}`;
-    
-    await updateDoc(userRef, {
-      walletBalance: increment(-cost),
-      purchasedCourses: arrayUnion(courseKey)
-    });
+    try {
+      await updateDoc(userRef, {
+        walletBalance: increment(-cost),
+        purchasedCourses: arrayUnion(courseKey)
+      });
+    } catch (err) {
+      console.error('purchaseCourse failed', err);
+      throw err;
+    }
   },
 
   addToWallet: async (userId: string, amount: number) => {
     if (!isFirebaseReady()) return;
     const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, {
-      walletBalance: increment(amount)
-    });
+    try {
+      await updateDoc(userRef, {
+        walletBalance: increment(amount)
+      });
+    } catch (err) {
+      console.error('addToWallet failed', err);
+      throw err;
+    }
   },
 
   getAvailableQuestions: async (user: User | null, category: string, subject: string): Promise<Question[]> => {
