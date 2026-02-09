@@ -45,3 +45,4 @@ coverage/
 # OS and tool files
 .DS_Store
 .vscode
+.vercel
