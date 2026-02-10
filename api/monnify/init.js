@@ -1,23 +1,21 @@
-import axios from 'axios';
-
 const MONNIFY_BASE_URL = 'https://api.monnify.com/api/v1';
 
-const axiosClient = axios.create({
-  baseURL: MONNIFY_BASE_URL,
-  timeout: 10_000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
-
+/**
+ * Authenticate with Monnify
+ */
 async function getMonnifyToken(apiKey, secretKey) {
-  const resp = await axiosClient.post('/auth/login', {
-    username: apiKey,
-    password: secretKey
+  const resp = await fetch(`${MONNIFY_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: apiKey,
+      password: secretKey,
+    }),
   });
 
-  const token = resp?.data?.responseBody?.accessToken;
+  const data = await resp.json();
 
+  const token = data?.responseBody?.accessToken;
   if (!token) {
     throw new Error('Failed to obtain Monnify access token');
   }
@@ -25,19 +23,19 @@ async function getMonnifyToken(apiKey, secretKey) {
   return token;
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     // Enforce method
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    const { userId, examType, subject, email, amount } = req.body ?? {};
+    const { userId, examType, subject, email, amount } = req.body || {};
 
     // Validate payload
     if (!userId || !email || !amount) {
       return res.status(400).json({
-        error: 'Missing required fields (userId, email, amount)'
+        error: 'Missing required fields (userId, email, amount)',
       });
     }
 
@@ -46,18 +44,22 @@ export default async function handler(req, res) {
       MONNIFY_API_KEY,
       MONNIFY_SECRET_KEY,
       MONNIFY_CONTRACT_CODE,
-      APP_URL
+      APP_URL,
     } = process.env;
 
-    if (!MONNIFY_API_KEY || !MONNIFY_SECRET_KEY || !MONNIFY_CONTRACT_CODE) {
+    if (
+      !MONNIFY_API_KEY ||
+      !MONNIFY_SECRET_KEY ||
+      !MONNIFY_CONTRACT_CODE
+    ) {
       return res.status(500).json({
-        error: 'Monnify environment variables not configured'
+        error: 'Monnify environment variables not configured',
       });
     }
 
     if (!APP_URL) {
       return res.status(500).json({
-        error: 'APP_URL environment variable not configured'
+        error: 'APP_URL environment variable not configured',
       });
     }
 
@@ -73,53 +75,57 @@ export default async function handler(req, res) {
     );
 
     // Initialize transaction
-    const initResp = await axiosClient.post(
-      '/merchant/transactions/init-transaction',
+    const initResp = await fetch(
+      `${MONNIFY_BASE_URL}/merchant/transactions/init-transaction`,
       {
-        amount,
-        currencyCode: 'NGN',
-        contractCode: MONNIFY_CONTRACT_CODE,
-        reference: transactionReference,
-        description: `Unlock ${subject || 'item'} (${examType || 'GENERAL'}) - Sirlekas`,
-        customerName: email.split('@')[0],
-        customerEmail: email,
-        paymentMethod: 'CARD',
-        redirectUrl: `${APP_URL}/?payment=success&ref=${transactionReference}`,
-        metaData: {
-          userId,
-          examType,
-          subject
-        }
-      },
-      {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          amount,
+          currencyCode: 'NGN',
+          contractCode: MONNIFY_CONTRACT_CODE,
+          reference: transactionReference,
+          description: `Unlock ${subject || 'item'} (${examType || 'GENERAL'}) - Sirlekas`,
+          customerName: email.split('@')[0],
+          customerEmail: email,
+          paymentMethod: 'CARD',
+          redirectUrl: `${APP_URL}/?payment=success&ref=${transactionReference}`,
+          metaData: {
+            userId,
+            examType,
+            subject,
+          },
+        }),
       }
     );
 
+    const initData = await initResp.json();
+
     const checkoutLink =
-      initResp?.data?.responseBody?.checkoutLink;
+      initData?.responseBody?.checkoutLink;
 
     if (!checkoutLink) {
+      console.error('Monnify init response:', initData);
       return res.status(502).json({
-        error: 'Monnify did not return a checkout link'
+        error: 'Monnify did not return a checkout link',
       });
     }
 
     return res.status(200).json({
       checkoutLink,
-      transactionReference
+      transactionReference,
     });
-
   } catch (error) {
     console.error(
       'Monnify init error:',
-      error?.response?.data || error
+      error?.message || error
     );
 
     return res.status(500).json({
-      error: 'Failed to initialize payment'
+      error: 'Failed to initialize payment',
     });
   }
-}
+};
