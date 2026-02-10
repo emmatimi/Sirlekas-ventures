@@ -23,7 +23,7 @@ async function getMonnifyToken(apiKey, secretKey) {
   return token;
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   try {
     // Enforce method
     if (req.method !== 'POST') {
@@ -128,4 +128,4 @@ module.exports = async function handler(req, res) {
       error: 'Failed to initialize payment',
     });
   }
-};
+}

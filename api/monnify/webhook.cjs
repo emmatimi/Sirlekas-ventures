@@ -16,7 +16,7 @@ module.exports.config = {
 const getRawBody = (req) =>
   new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', chunk => (data += chunk));
+    req.on('data', (chunk) => (data += chunk));
     req.on('end', () => resolve(Buffer.from(data)));
     req.on('error', reject);
   });
@@ -87,7 +87,7 @@ module.exports = async function handler(req, res) {
 
     const { userId, examType, subject } = metaData || {};
 
-    if (!userId || !examType || !subject) {
+    if (!userId || !examType) {
       console.warn('Webhook missing metadata');
       return res.status(200).send('Invalid metadata');
     }
@@ -107,34 +107,52 @@ module.exports = async function handler(req, res) {
       return res.status(200).send('Duplicate');
     }
 
+    const paidAmount = Number(amountPaid);
+
     // Amount validation
-    if (Number(amountPaid) < 300) {
+    if (paidAmount < 300) {
       console.warn('Underpayment detected:', amountPaid);
       return res.status(200).send('Underpaid');
     }
 
-    const courseKey = `${examType}-${subject}`;
     const userRef = db.collection('users').doc(userId);
 
-    // Atomic write
+    // 🔒 Atomic write
     await db.runTransaction(async (transaction) => {
+      // Always record transaction
       transaction.set(txRef, {
         reference: paymentReference,
         status: 'SUCCESS',
-        amount: amountPaid,
+        amount: paidAmount,
         userId,
         examType,
-        subject,
+        subject: subject || null,
+        type: examType === 'WALLET_FUND' ? 'WALLET_FUND' : 'COURSE_UNLOCK',
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      transaction.update(userRef, {
-        purchasedCourses:
-          admin.firestore.FieldValue.arrayUnion(courseKey),
-      });
+      if (examType === 'WALLET_FUND') {
+        // 💰 Wallet funding
+        transaction.update(userRef, {
+          walletBalance:
+            admin.firestore.FieldValue.increment(paidAmount),
+          pendingTransaction:
+            admin.firestore.FieldValue.delete(),
+        });
+      } else {
+        // 🎓 Course purchase
+        const courseKey = `${examType}-${subject}`;
+
+        transaction.update(userRef, {
+          purchasedCourses:
+            admin.firestore.FieldValue.arrayUnion(courseKey),
+          pendingTransaction:
+            admin.firestore.FieldValue.delete(),
+        });
+      }
     });
 
-    // Optional EmailJS notification (uses native fetch)
+    // 📧 Optional EmailJS notification
     try {
       const {
         EMAILJS_SERVICE_ID,
@@ -157,9 +175,15 @@ module.exports = async function handler(req, res) {
             template_params: {
               to_name: customer?.name || 'Customer',
               to_email: customer?.email,
-              transaction_type: 'COURSE_UNLOCK',
-              item_name: `${subject} (${examType})`,
-              amount: amountPaid,
+              transaction_type:
+                examType === 'WALLET_FUND'
+                  ? 'WALLET_FUND'
+                  : 'COURSE_UNLOCK',
+              item_name:
+                examType === 'WALLET_FUND'
+                  ? 'Wallet Funding'
+                  : `${subject} (${examType})`,
+              amount: paidAmount,
               reference: paymentReference,
               date: new Date().toLocaleDateString(),
             },
@@ -167,12 +191,18 @@ module.exports = async function handler(req, res) {
         });
       }
     } catch (emailErr) {
-      console.error('EmailJS error:', emailErr?.message || emailErr);
+      console.error(
+        'EmailJS error:',
+        emailErr?.message || emailErr
+      );
     }
 
     return res.status(200).send('OK');
   } catch (err) {
-    console.error('Webhook handler error:', err?.message || err);
+    console.error(
+      'Webhook handler error:',
+      err?.message || err
+    );
     return res.status(500).send('Server Error');
   }
 };
