@@ -1,6 +1,7 @@
 const axios = require('axios');
 
-const MONNIFY_BASE_URL = 'https://api.monnify.com/api/v1';
+const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
+
 
 const getMonnifyToken = async (apiKey, secret) => {
   const resp = await axios.post(`${MONNIFY_BASE_URL}/auth/login`, {

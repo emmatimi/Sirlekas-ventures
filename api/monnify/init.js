@@ -57,6 +57,11 @@ export default async function handler(req, res) {
         error: 'Monnify environment variables not configured',
       });
     }
+    if (!MONNIFY_BASE_URL) {
+      return res.status(500).json({
+        error: 'MONNIFY_BASE_URL not configured',
+      });
+    }
 
     if (!APP_URL) {
       return res.status(500).json({
