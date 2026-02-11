@@ -1,4 +1,5 @@
-const MONNIFY_BASE_URL = 'https://api.monnify.com/api/v1';
+const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
+
 
 /**
  * Authenticate with Monnify

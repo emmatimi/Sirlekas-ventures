@@ -6,10 +6,11 @@ import emailjs from '@emailjs/browser';
  * Handles transaction receipts and system notifications.
  */
 
-const EMAILJS_SERVICE_ID = process.env.VITE_EMAILJS_SERVICE_ID || process.env.EMAILJS_SERVICE_ID || "service_sirlekas";
-const EMAILJS_RECEIPT_TEMPLATE_ID = process.env.VITE_EMAILJS_TEMPLATE_ID || process.env.EMAILJS_RECEIPT_TEMPLATE_ID || "template_receipt";
-const EMAILJS_RESET_TEMPLATE_ID = process.env.VITE_EMAILJS_RESET_TEMPLATE_ID || process.env.EMAILJS_RESET_TEMPLATE_ID || "template_reset_password";
-const EMAILJS_PUBLIC_KEY = process.env.VITE_EMAILJS_PUBLIC_KEY || process.env.EMAILJS_PUBLIC_KEY || "user_placeholder_key";
+const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+const EMAILJS_RECEIPT_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+const EMAILJS_RESET_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_RESET_TEMPLATE_ID;
+const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+
 
 export const emailService = {
   /**
