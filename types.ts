@@ -7,10 +7,11 @@ export interface User {
   email: string;
   role: UserRole;
   avatar?: string;
-  subscriptions?: string[]; // Deprecated: keeping for compatibility
+  subscriptions?: string[]; 
   purchasedCourses?: string[]; // format: "examType-subject"
   walletBalance: number;
   createdAt: number;
+   pendingTransaction?: PendingTransaction;
 }
 
 export interface Question {
@@ -47,3 +48,12 @@ export interface Transaction {
   status: 'PENDING' | 'SUCCESS' | 'FAILED';
   timestamp: number;
 }
+
+export type PendingTransaction = {
+  reference: string;            // SIRL-... paymentReference
+  amount: number;
+  type: 'WALLET_FUND' | 'COURSE_UNLOCK';
+  examType?: string;
+  subject?: string;
+  timestamp: number;
+};

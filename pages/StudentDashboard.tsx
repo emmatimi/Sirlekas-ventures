@@ -55,58 +55,90 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     return () => clearInterval(interval);
   }, [user.uid]);
 
-  // Handle live payment callbacks (Success returns from Monnify)
-  useEffect(() => {
-    const handlePaymentRedirect = async () => {
-      const payment = searchParams.get('payment');
-      const amount = Number(searchParams.get('amount'));
-      const userId = searchParams.get('userId');
-      const type = searchParams.get('type');
-      const ref = searchParams.get('ref') || 'N/A';
+      // Handle Monnify redirect callback (Success returns from Monnify)
+    useEffect(() => {
+      const handlePaymentRedirect = async () => {
+        const payment = searchParams.get('payment');
+        const ref = searchParams.get('ref'); // SIRL-... paymentReference
 
-      if (payment === 'success' && userId === user.uid && amount) {
+        if (payment !== 'success' || !ref) return;
+
         try {
           setIsProcessing(true);
-          
-          if (type === 'WALLET_FUND') {
-            await dbService.addToWallet(user.uid, amount);
+          setError('');
+          setSuccessMessage('');
+
+          // 1) Verify payment with backend
+          const verify = await paymentService.verifyPayment(ref);
+
+          if (!verify?.verified) {
+            throw new Error(`Payment not verified. Status: ${verify?.status || 'UNKNOWN'}`);
+          }
+
+          // 2) Fetch latest user record to get pendingTransaction (source of truth)
+          const refreshed = await dbService.getUser(user.uid);
+          if (!refreshed?.pendingTransaction) {
+            throw new Error('No pending transaction found. Please contact support.');
+          }
+
+          const pending = refreshed.pendingTransaction;
+
+          // Safety: ensure references match
+          if (pending.reference && pending.reference !== ref) {
+            throw new Error('Payment reference mismatch. Please contact support.');
+          }
+
+          // 3) Apply based on transaction type
+          if (pending.type === 'WALLET_FUND') {
+            await dbService.addToWallet(user.uid, pending.amount);
+
             await emailService.sendPaymentReceipt({
               to_name: user.name,
               to_email: user.email,
               transaction_type: 'WALLET_FUND',
-              amount: amount,
-              reference: ref
+              amount: pending.amount,
+              reference: ref,
             });
-            setSuccessMessage(`Wallet credited with ₦${amount}! A receipt has been sent to your email.`);
-          } else if (type === 'COURSE_UNLOCK') {
-            const examType = searchParams.get('examType') || '';
-            const subject = searchParams.get('subject') || '';
-            await dbService.purchaseCourse(user.uid, examType, subject, 0); // Cost 0 because they paid directly via gateway
+
+            setSuccessMessage(`Wallet credited with ₦${pending.amount}! Receipt sent to your email.`);
+          } else {
+            const examType = pending.examType || '';
+            const subject = pending.subject || '';
+
+            if (!examType || !subject) {
+              throw new Error('Pending transaction missing examType/subject.');
+            }
+
+            // cost=0 because payment already done via Monnify
+            await dbService.purchaseCourse(user.uid, examType, subject, 0);
+
             await emailService.sendPaymentReceipt({
               to_name: user.name,
               to_email: user.email,
               transaction_type: 'COURSE_UNLOCK',
-              amount: amount,
+              amount: pending.amount,
               reference: ref,
-              item_name: `${subject} (${examType})`
+              item_name: `${subject} (${examType})`,
             });
+
             setSuccessMessage(`${subject} has been unlocked successfully! Receipt sent to email.`);
           }
-          
+
+          // 4) Refresh state and clear query params
           await refreshUser();
           setSearchParams({});
           setTimeout(() => setSuccessMessage(''), 8000);
-        } catch (err) {
-          console.error("Payment confirmation failed:", err);
-          setError('Payment confirmation failed. Please contact support with your reference.');
+        } catch (err: any) {
+          console.error('Payment confirmation failed:', err);
+          setError(err?.message || 'Payment confirmation failed. Please contact support with your reference.');
         } finally {
           setIsProcessing(false);
         }
-      }
-    };
+      };
 
-    handlePaymentRedirect();
-  }, [searchParams, user.uid, setSearchParams]);
+      handlePaymentRedirect();
+    }, [searchParams, user.uid, setSearchParams]);
+
 
   useEffect(() => {
     if (selectedExamType) {

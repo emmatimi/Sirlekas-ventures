@@ -1,4 +1,3 @@
-
 import { 
   doc, 
   getDoc, 
@@ -13,7 +12,7 @@ import {
   serverTimestamp,
   arrayUnion,
   increment,
-  Timestamp
+  deleteField,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { User, Question, ExamResult, InspirationalQuote } from '../types';
@@ -33,9 +32,8 @@ const FALLBACK_QUOTES: InspirationalQuote[] = [
   { id: 'q1', text: "Excellence is not a destination, it's a continuous journey.", author: "Sirlekas Ventures" }
 ];
 
-// Consider Firebase 'ready' when `db` exists and a Firebase API key is present.
-// This avoids attempting real Firestore ops when the app was initialized in a fallback mode.
-const isFirebaseReady = () => !!db && !!process.env.VITE_FIREBASE_API_KEY;
+// ✅ Vite-safe env usage
+const isFirebaseReady = () => !!db && !!import.meta.env.VITE_FIREBASE_API_KEY;
 
 export const dbService = {
   syncUser: async (firebaseUser: any, role: string = 'student'): Promise<User> => {
@@ -114,6 +112,7 @@ export const dbService = {
     return user.subscriptions?.includes(category) || false;
   },
 
+  // ✅ Clear pendingTransaction after purchase
   purchaseCourse: async (userId: string, examType: string, subject: string, cost: number = 300) => {
     if (!isFirebaseReady()) return;
     const userRef = doc(db, 'users', userId);
@@ -121,7 +120,8 @@ export const dbService = {
     try {
       await updateDoc(userRef, {
         walletBalance: increment(-cost),
-        purchasedCourses: arrayUnion(courseKey)
+        purchasedCourses: arrayUnion(courseKey),
+        pendingTransaction: deleteField(),
       });
     } catch (err) {
       console.error('purchaseCourse failed', err);
@@ -129,12 +129,14 @@ export const dbService = {
     }
   },
 
+  // ✅ Clear pendingTransaction after funding
   addToWallet: async (userId: string, amount: number) => {
     if (!isFirebaseReady()) return;
     const userRef = doc(db, 'users', userId);
     try {
       await updateDoc(userRef, {
-        walletBalance: increment(amount)
+        walletBalance: increment(amount),
+        pendingTransaction: deleteField(),
       });
     } catch (err) {
       console.error('addToWallet failed', err);
@@ -145,7 +147,6 @@ export const dbService = {
   getAvailableQuestions: async (user: User | null, category: string, subject: string): Promise<Question[]> => {
     const all = await dbService.getQuestions();
     const filtered = all.filter(q => q.examType === category && q.subject === subject);
-    
     if (dbService.isCoursePurchased(user, category, subject)) return filtered;
     return filtered.slice(0, 15);
   },
@@ -172,7 +173,6 @@ export const dbService = {
     await deleteDoc(doc(db, 'questions', id));
   },
 
-  // Fix for AdminDashboard.tsx - Adding missing deleteQuestionsBySubject
   deleteQuestionsBySubject: async (examType: string, subject: string) => {
     if (!isFirebaseReady()) return;
     const qRef = collection(db, 'questions');
@@ -207,10 +207,10 @@ export const dbService = {
       return snap.docs.map(d => {
         const data = d.data();
         const ts = data.timestamp;
-        let finalTimestamp = ts?.toMillis?.() || ts?.seconds * 1000 || ts || Date.now();
+        const finalTimestamp = ts?.toMillis?.() || ts?.seconds * 1000 || ts || Date.now();
         return { id: d.id, ...data, timestamp: finalTimestamp } as ExamResult;
       });
-    } catch (error) {
+    } catch {
       return [];
     }
   },
@@ -222,7 +222,7 @@ export const dbService = {
       const snap = await getDocs(qRef);
       if (snap.empty) return FALLBACK_QUOTES;
       return snap.docs.map(d => ({ id: d.id, ...d.data() } as InspirationalQuote));
-    } catch (error) {
+    } catch {
       return FALLBACK_QUOTES;
     }
   },
@@ -232,7 +232,6 @@ export const dbService = {
     await setDoc(doc(db, 'quotes', quote.id), quote);
   },
 
-  // Fix for AdminDashboard.tsx - Adding missing deleteQuote
   deleteQuote: async (id: string) => {
     if (!isFirebaseReady()) return;
     await deleteDoc(doc(db, 'quotes', id));
