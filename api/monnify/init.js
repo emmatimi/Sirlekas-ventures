@@ -115,7 +115,7 @@ export default async function handler(req, res) {
 
     const initData = await initResp.json();
 
-    const checkoutLink = initData?.responseBody?.checkoutLink;
+    const checkoutLink = initData?.responseBody?.checkoutUrl;
 
     if (!checkoutLink) {
       console.error("Monnify init response:", initData);
@@ -125,10 +125,12 @@ export default async function handler(req, res) {
       });
     }
 
-    return res.status(200).json({
-      checkoutLink,
-      transactionReference,
-    });
+  return res.status(200).json({
+  checkoutLink,
+  paymentReference: initData.responseBody.paymentReference, // your reference
+  monnifyTransactionReference: initData.responseBody.transactionReference,
+});
+
   } catch (error) {
     console.error("Monnify init error:", error?.message || error);
     return res.status(500).json({ error: "Failed to initialize payment" });
