@@ -6,9 +6,9 @@ const VERIFY_ENDPOINT = '/api/monnify/verify';
 
 interface InitPaymentResponse {
   checkoutUrl: string;
-  paymentReference: string; 
-  monnifyTransactionReference?: string;
+  paymentReference: string; // SIRL-...
 }
+
 
 export const paymentService = {
   /**
