@@ -1,20 +1,16 @@
 const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
 
 /**
- * Authenticate with Monnify
+ * Authenticate with Monnify (Basic Auth)
  */
 async function getMonnifyToken(apiKey, secretKey) {
-  if (!MONNIFY_BASE_URL) {
-    throw new Error("MONNIFY_BASE_URL not configured");
-  }
+  if (!MONNIFY_BASE_URL) throw new Error("MONNIFY_BASE_URL not configured");
 
   const basic = Buffer.from(`${apiKey}:${secretKey}`).toString("base64");
 
   const resp = await fetch(`${MONNIFY_BASE_URL}/auth/login`, {
     method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-    },
+    headers: { Authorization: `Basic ${basic}` },
   });
 
   const data = await resp.json();
@@ -36,10 +32,20 @@ export default async function handler(req, res) {
 
     const { userId, examType, subject, email, amount } = req.body || {};
 
-    if (!userId || !email || !amount) {
+    // Basic payload validation
+    if (!userId || !email || amount == null) {
       return res.status(400).json({
         error: "Missing required fields (userId, email, amount)",
       });
+    }
+
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ error: "Invalid amount" });
+    }
+
+    if (typeof email !== "string" || !email.includes("@")) {
+      return res.status(400).json({ error: "Invalid email" });
     }
 
     const {
@@ -49,6 +55,7 @@ export default async function handler(req, res) {
       APP_URL,
     } = process.env;
 
+    // Env validation
     if (!MONNIFY_BASE_URL) {
       return res.status(500).json({ error: "MONNIFY_BASE_URL not configured" });
     }
@@ -65,11 +72,34 @@ export default async function handler(req, res) {
       });
     }
 
+    // Transaction reference
     const transactionReference = `SIRL-${examType || "GEN"}-${Date.now()}-${String(
       userId
     ).slice(0, 6)}`;
 
+    // Auth token
     const token = await getMonnifyToken(MONNIFY_API_KEY, MONNIFY_SECRET_KEY);
+
+    // ✅ Monnify init payload (use expected field names)
+    const payload = {
+      amount: numericAmount,
+      currencyCode: "NGN",
+      contractCode: MONNIFY_CONTRACT_CODE,
+
+      // IMPORTANT: Monnify commonly expects these names
+      paymentReference: transactionReference,
+      paymentDescription: `Unlock ${subject || "item"} (${examType || "GENERAL"}) - Sirlekas`,
+
+      customerName: String(email).split("@")[0],
+      customerEmail: email,
+
+      paymentMethods: ["CARD", "ACCOUNT_TRANSFER"],
+      redirectUrl: `${APP_URL}/?payment=success&ref=${transactionReference}`,
+
+      metaData: { userId, examType, subject },
+    };
+
+    console.log("Monnify init payload:", payload);
 
     const initResp = await fetch(
       `${MONNIFY_BASE_URL}/merchant/transactions/init-transaction`,
@@ -79,28 +109,19 @@ export default async function handler(req, res) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          amount,
-          currencyCode: "NGN",
-          contractCode: MONNIFY_CONTRACT_CODE,
-          reference: transactionReference,
-          description: `Unlock ${subject || "item"} (${examType || "GENERAL"}) - Sirlekas`,
-          customerName: String(email).split("@")[0],
-          customerEmail: email,
-          paymentMethod: "CARD",
-          redirectUrl: `${APP_URL}/?payment=success&ref=${transactionReference}`,
-          metaData: { userId, examType, subject },
-        }),
+        body: JSON.stringify(payload),
       }
     );
 
     const initData = await initResp.json();
 
     const checkoutLink = initData?.responseBody?.checkoutLink;
+
     if (!checkoutLink) {
       console.error("Monnify init response:", initData);
       return res.status(502).json({
         error: "Monnify did not return a checkout link",
+        monnify: initData,
       });
     }
 
