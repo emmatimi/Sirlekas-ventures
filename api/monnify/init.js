@@ -5,14 +5,26 @@ const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
  * Authenticate with Monnify
  */
 async function getMonnifyToken(apiKey, secretKey) {
+  const basic = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
+
   const resp = await fetch(`${MONNIFY_BASE_URL}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: apiKey,
-      password: secretKey,
-    }),
+    headers: {
+      Authorization: `Basic ${basic}`,
+    },
   });
+
+  const data = await resp.json();
+
+  const token = data?.responseBody?.accessToken;
+  if (!token) {
+    console.error('Monnify auth response:', data);
+    throw new Error('Failed to obtain Monnify access token');
+  }
+
+  return token;
+}
+
 
   const data = await resp.json();
 
@@ -22,7 +34,7 @@ async function getMonnifyToken(apiKey, secretKey) {
   }
 
   return token;
-}
+
 
 export default async function handler(req, res) {
   try {
