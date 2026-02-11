@@ -98,16 +98,21 @@ export const paymentService = {
         throw new Error('Invalid payment initialization response');
       }
 
-      await setDoc(doc(db, 'users', userId), {
-        pendingTransaction: {
-          reference: paymentReference,
-          amount,
-          examType,
-          subject,
-          type: 'COURSE_UNLOCK',
-          timestamp: Date.now()
-        }
-      });
+        await setDoc(
+        doc(db, 'users', userId),
+        {
+          pendingTransaction: {
+            reference: paymentReference,
+            amount,
+            examType,
+            subject,
+            type: 'COURSE_UNLOCK',
+            timestamp: Date.now(),
+          },
+        },
+        { merge: true }
+      );
+
 
       window.location.href = checkoutUrl;
 
