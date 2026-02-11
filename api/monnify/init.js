@@ -115,21 +115,27 @@ export default async function handler(req, res) {
 
     const initData = await initResp.json();
 
-    const checkoutLink = initData?.responseBody?.checkoutUrl;
+    const checkoutUrl = initData?.responseBody?.checkoutUrl;
+    const paymentReference = initData?.responseBody?.paymentReference; // SIRL-...
+    const monnifyTransactionReference = initData?.responseBody?.transactionReference; // MNFY|...
 
-    if (!checkoutLink) {
-      console.error("Monnify init response:", initData);
+    if (!checkoutUrl || !paymentReference) {
+      console.log("Monnify init response:", initData);
       return res.status(502).json({
-        error: "Monnify did not return a checkout link",
+        error: "Invalid Monnify init response",
         monnify: initData,
       });
     }
 
-  return res.status(200).json({
-  checkoutLink,
-  paymentReference: initData.responseBody.paymentReference, // your reference
-  monnifyTransactionReference: initData.responseBody.transactionReference,
-});
+    return res.status(200).json({
+      checkoutUrl,
+      paymentReference,
+      monnifyTransactionReference,
+    });
+
+
+
+ 
 
   } catch (error) {
     console.error("Monnify init error:", error?.message || error);

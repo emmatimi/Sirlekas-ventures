@@ -5,8 +5,9 @@ const INIT_ENDPOINT = '/api/monnify/init';
 const VERIFY_ENDPOINT = '/api/monnify/verify';
 
 interface InitPaymentResponse {
-  checkoutLink: string;
-  transactionReference: string;
+  checkoutUrl: string;
+  paymentReference: string; 
+  monnifyTransactionReference?: string;
 }
 
 export const paymentService = {
@@ -36,25 +37,24 @@ export const paymentService = {
         throw new Error(err.error || 'Payment initialization failed');
       }
 
-      const result: InitPaymentResponse = await resp.json();
-      const { checkoutLink, transactionReference } = result;
+     const result: InitPaymentResponse = await resp.json();
+      const { checkoutUrl, paymentReference } = result;
 
-      if (!checkoutLink || !transactionReference) {
+      if (!checkoutUrl || !paymentReference) {
         throw new Error('Invalid payment initialization response');
       }
 
-      // Store pending transaction
       await updateDoc(doc(db, 'users', userId), {
         pendingTransaction: {
-          reference: transactionReference,
+          reference: paymentReference,
           amount,
           type: 'WALLET_FUND',
           timestamp: Date.now()
         }
       });
 
-      // Redirect to Monnify
-      window.location.href = checkoutLink;
+      window.location.href = checkoutUrl;
+
 
     } catch (error) {
       console.error('Wallet Funding Error:', error);
@@ -92,16 +92,15 @@ export const paymentService = {
       }
 
       const result: InitPaymentResponse = await resp.json();
-      const { checkoutLink, transactionReference } = result;
+      const { checkoutUrl, paymentReference } = result;
 
-      if (!checkoutLink || !transactionReference) {
+      if (!checkoutUrl || !paymentReference) {
         throw new Error('Invalid payment initialization response');
       }
 
-      // Store pending transaction
       await updateDoc(doc(db, 'users', userId), {
         pendingTransaction: {
-          reference: transactionReference,
+          reference: paymentReference,
           amount,
           examType,
           subject,
@@ -110,8 +109,9 @@ export const paymentService = {
         }
       });
 
-      // Redirect to Monnify
-      window.location.href = checkoutLink;
+      window.location.href = checkoutUrl;
+
+
 
     } catch (error) {
       console.error('Course Purchase Error:', error);
