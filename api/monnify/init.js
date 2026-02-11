@@ -94,7 +94,7 @@ export default async function handler(req, res) {
       customerEmail: email,
 
       paymentMethods: ["CARD", "ACCOUNT_TRANSFER"],
-      redirectUrl: `${APP_URL}/dashboard?payment=success&ref=${transactionReference}`,
+      redirectUrl: `${APP_URL}/dashboard?payment=success&ref=${encodeURIComponent(transactionReference)}`,
 
       metaData: { userId, examType, subject },
     };

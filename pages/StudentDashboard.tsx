@@ -55,90 +55,90 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     return () => clearInterval(interval);
   }, [user.uid]);
 
-      // Handle Monnify redirect callback (Success returns from Monnify)
-    useEffect(() => {
-      const handlePaymentRedirect = async () => {
-        const payment = searchParams.get('payment');
-        const ref = searchParams.get('ref'); // SIRL-... paymentReference
+// Handle Monnify redirect callback (Success returns from Monnify)
+useEffect(() => {
+  const handlePaymentRedirect = async () => {
+    const payment = searchParams.get('payment');
+    const ref = searchParams.get('ref'); // SIRL-... paymentReference
 
-        if (payment !== 'success' || !ref) return;
+    if (payment !== 'success' || !ref) return;
 
-        try {
-          setIsProcessing(true);
-          setError('');
-          setSuccessMessage('');
+    try {
+      setIsProcessing(true);
+      setError('');
+      setSuccessMessage('');
 
-          // 1) Verify payment with backend
-          const verify = await paymentService.verifyPayment(ref);
+      // 1) Verify payment with backend
+      const verify = await paymentService.verifyPayment(ref);
 
-          if (!verify?.verified) {
-            throw new Error(`Payment not verified. Status: ${verify?.status || 'UNKNOWN'}`);
-          }
+      if (!verify?.verified) {
+        throw new Error(`Payment not verified. Status: ${verify?.status || 'UNKNOWN'}`);
+      }
 
-          // 2) Fetch latest user record to get pendingTransaction (source of truth)
-          const refreshed = await dbService.getUser(user.uid);
-          if (!refreshed?.pendingTransaction) {
-            throw new Error('No pending transaction found. Please contact support.');
-          }
+      // 2) Fetch latest user from Firestore to read pendingTransaction
+      const refreshed = await dbService.getUser(user.uid);
+      if (!refreshed || !refreshed.pendingTransaction) {
+        throw new Error('No pending transaction found. Please contact support.');
+      }
 
-          const pending = refreshed.pendingTransaction;
+      const pending = refreshed.pendingTransaction;
 
-          // Safety: ensure references match
-          if (pending.reference && pending.reference !== ref) {
-            throw new Error('Payment reference mismatch. Please contact support.');
-          }
+      // Safety: ensure the reference matches what we stored
+      if (pending.reference && pending.reference !== ref) {
+        throw new Error('Payment reference mismatch. Please contact support.');
+      }
 
-          // 3) Apply based on transaction type
-          if (pending.type === 'WALLET_FUND') {
-            await dbService.addToWallet(user.uid, pending.amount);
+      // 3) Apply based on pending.type
+      if (pending.type === 'WALLET_FUND') {
+        await dbService.addToWallet(user.uid, pending.amount);
 
-            await emailService.sendPaymentReceipt({
-              to_name: user.name,
-              to_email: user.email,
-              transaction_type: 'WALLET_FUND',
-              amount: pending.amount,
-              reference: ref,
-            });
+        await emailService.sendPaymentReceipt({
+          to_name: user.name,
+          to_email: user.email,
+          transaction_type: 'WALLET_FUND',
+          amount: pending.amount,
+          reference: ref,
+        });
 
-            setSuccessMessage(`Wallet credited with ₦${pending.amount}! Receipt sent to your email.`);
-          } else {
-            const examType = pending.examType || '';
-            const subject = pending.subject || '';
+        setSuccessMessage(`Wallet credited with ₦${pending.amount}! Receipt sent to your email.`);
+      } else {
+        const examType = pending.examType || '';
+        const subject = pending.subject || '';
 
-            if (!examType || !subject) {
-              throw new Error('Pending transaction missing examType/subject.');
-            }
-
-            // cost=0 because payment already done via Monnify
-            await dbService.purchaseCourse(user.uid, examType, subject, 0);
-
-            await emailService.sendPaymentReceipt({
-              to_name: user.name,
-              to_email: user.email,
-              transaction_type: 'COURSE_UNLOCK',
-              amount: pending.amount,
-              reference: ref,
-              item_name: `${subject} (${examType})`,
-            });
-
-            setSuccessMessage(`${subject} has been unlocked successfully! Receipt sent to email.`);
-          }
-
-          // 4) Refresh state and clear query params
-          await refreshUser();
-          setSearchParams({});
-          setTimeout(() => setSuccessMessage(''), 8000);
-        } catch (err: any) {
-          console.error('Payment confirmation failed:', err);
-          setError(err?.message || 'Payment confirmation failed. Please contact support with your reference.');
-        } finally {
-          setIsProcessing(false);
+        if (!examType || !subject) {
+          throw new Error('Pending transaction missing examType/subject.');
         }
-      };
 
-      handlePaymentRedirect();
-    }, [searchParams, user.uid, setSearchParams]);
+        // cost = 0 because payment already happened via Monnify
+        await dbService.purchaseCourse(user.uid, examType, subject, 0);
 
+        await emailService.sendPaymentReceipt({
+          to_name: user.name,
+          to_email: user.email,
+          transaction_type: 'COURSE_UNLOCK',
+          amount: pending.amount,
+          reference: ref,
+          item_name: `${subject} (${examType})`,
+        });
+
+        setSuccessMessage(`${subject} unlocked successfully! Receipt sent to email.`);
+      }
+
+      // 4) Refresh UI + clean query params
+      await refreshUser();
+      setSearchParams({});
+      setTimeout(() => setSuccessMessage(''), 8000);
+
+    } catch (err: any) {
+      console.error('Payment confirmation failed:', err);
+      setError(err?.message || 'Payment confirmation failed. Please contact support with your reference.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  handlePaymentRedirect();
+}, [searchParams, user.uid, setSearchParams]);
 
   useEffect(() => {
     if (selectedExamType) {

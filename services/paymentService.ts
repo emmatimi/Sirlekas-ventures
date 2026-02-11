@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 
 const INIT_ENDPOINT = '/api/monnify/init';
 const VERIFY_ENDPOINT = '/api/monnify/verify';
@@ -44,14 +44,14 @@ export const paymentService = {
         throw new Error('Invalid payment initialization response');
       }
 
-      await updateDoc(doc(db, 'users', userId), {
+          await setDoc(doc(db, 'users', userId), {
         pendingTransaction: {
           reference: paymentReference,
           amount,
           type: 'WALLET_FUND',
           timestamp: Date.now()
         }
-      });
+      }, { merge: true });
 
       window.location.href = checkoutUrl;
 
@@ -98,7 +98,7 @@ export const paymentService = {
         throw new Error('Invalid payment initialization response');
       }
 
-      await updateDoc(doc(db, 'users', userId), {
+      await setDoc(doc(db, 'users', userId), {
         pendingTransaction: {
           reference: paymentReference,
           amount,
