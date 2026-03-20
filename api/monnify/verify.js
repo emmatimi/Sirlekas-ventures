@@ -22,15 +22,8 @@ export default async function handler(req, res) {
       return res.status(405).send("Method Not Allowed");
     }
 
-    const body =
-      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
-    console.log("BODY:", body);
-
-    const {
-      paymentReference,                
-      monnifyTransactionReference,     
-    } = body || {};
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const { paymentReference, monnifyTransactionReference } = body || {};
 
     if (!paymentReference && !monnifyTransactionReference) {
       return res.status(400).json({
@@ -43,10 +36,19 @@ export default async function handler(req, res) {
       process.env.MONNIFY_SECRET_KEY
     );
 
-    const params = {
-      paymentReference,
-    };
-    console.log("VERIFY PARAMS:", params);
+    /**
+     * FIX: Monnify sometimes requires the transactionReference (MNFY|...) 
+     * if the internal paymentReference (SIRL-...) isn't yet indexed 
+     * in the query API.
+     */
+    const params = {};
+    if (monnifyTransactionReference) {
+      params.transactionReference = monnifyTransactionReference;
+    } else {
+      params.paymentReference = paymentReference;
+    }
+
+    console.log("VERIFYING WITH PARAMS:", params);
 
     const response = await axios.get(
       `${MONNIFY_BASE_URL}/transactions/query`,
@@ -58,18 +60,23 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log("VERIFY SUCCESS:", response.data);
-
     return res.status(200).json(response.data);
   } catch (error) {
-    console.error(
-      "VERIFY ERROR:",
-      error.response?.data || error.message
-    );
+    const errorData = error.response?.data;
+    console.error("VERIFY ERROR:", errorData || error.message);
 
-return res.status(200).json({
-  status: "PENDING",
-  details: error.response?.data || error.message,
-});
+    // If Monnify explicitly says "not found", return a 404-style status 
+    // so the frontend knows to retry or wait for the webhook.
+    if (errorData?.responseCode === "99") {
+      return res.status(200).json({
+        status: "NOT_FOUND",
+        responseMessage: errorData.responseMessage,
+      });
+    }
+
+    return res.status(200).json({
+      status: "ERROR",
+      details: errorData || error.message,
+    });
   }
 }
