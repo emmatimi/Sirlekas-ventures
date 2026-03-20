@@ -178,11 +178,36 @@ export const paymentService = {
     return { verified: true };
   }
 
-  if (status === "PENDING") {
-    throw new Error("Payment still processing");
-  }
+    if (!status) {
+      throw new Error("no transaction");
+    }
 
-  throw new Error("Payment failed");
+    if (status === "PENDING") {
+      throw new Error("processing");
+    }
+
+  const errorMessage =
+  data?.details?.responseMessage ||
+  data?.responseMessage ||
+  data?.error ||
+  "unknown error";
+
+if (status === "PAID") {
+  return { verified: true };
+}
+
+if (
+  errorMessage.toLowerCase().includes("no transaction") ||
+  errorMessage.toLowerCase().includes("not found")
+) {
+  throw new Error("no transaction");
+}
+
+if (status === "PENDING") {
+  throw new Error("processing");
+}
+
+throw new Error(errorMessage);
 },
 
 };
