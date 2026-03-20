@@ -52,7 +52,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  // Prevent Monnify redirect handler re-running forever
+  // Prevent Monnify redirect handler re-running 
   const handledPaymentRef = useRef<string | null>(null);
 
   // If parent updates initialUser, sync local state
@@ -123,7 +123,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         setQuestions(Array.isArray(allQuestions) ? allQuestions : []);
         setCoursePrices(prices || {});
 
-        // If you later add defaultPrice to dbService.getCoursePrices, set it here.
+        //  add defaultPrice to dbService.getCoursePrices.
         setDefaultCoursePrice(300);
 
         await refreshUser();
@@ -176,13 +176,18 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     };
   }, [courseToUnlock, defaultCoursePrice, getLocalPrice]);
 
-  // ✅ Handle Monnify redirect callback (idempotent + replace)
+  //  Handle Monnify redirect callback (idempotent + replace)
   useEffect(() => {
-    const sp = new URLSearchParams(searchString);
-    const payment = sp.get("payment");
-    const ref = sp.get("ref") || sp.get("paymentReference") || "";
+      const sp = new URLSearchParams(searchString);
 
-    if (payment !== "success" || !ref) return;
+      const paymentReference = sp.get("paymentReference");
+      const transactionReference = sp.get("transactionReference");
+
+      const ref = paymentReference || transactionReference || "";
+
+      if (!ref) return;
+
+      const cleanRef = ref.split("?")[0];
 
     // prevent re-running
     if (handledPaymentRef.current === ref) return;
@@ -196,14 +201,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         setError("");
         setSuccessMessage("");
 
-        // 1) Verify payment with backend
-        const verify = await paymentService.verifyPayment(ref);
+        //  Verify payment with backend
+        const verify = await paymentService.verifyPayment(cleanRef);
 
         if (!verify?.verified) {
           throw new Error(`Payment not verified. Status: ${verify?.status || "UNKNOWN"}`);
         }
 
-        // 2) Fetch latest user from Firestore to read pendingTransaction
+        // Fetch latest user from Firestore to read pendingTransaction
         const refreshed = await dbService.getUser(uid);
         const pending: PendingTransaction | undefined = (refreshed as any)?.pendingTransaction;
 
@@ -216,7 +221,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
           throw new Error("Payment reference mismatch. Please contact support.");
         }
 
-        // 3) Apply based on pending.type
+        // Apply based on pending.type
         if (pending.type === "WALLET_FUND") {
           await dbService.addToWallet(uid, pending.amount);
 
@@ -238,8 +243,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
           if (!examType || !subject) {
             throw new Error("Pending transaction missing examType/subject.");
           }
-
-          // cost = 0 because they already paid via Monnify
           await dbService.purchaseCourse(uid, examType, subject, 0);
 
           await emailService.sendPaymentReceipt({
@@ -256,7 +259,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
           }
         }
 
-        // 4) Clear pendingTransaction so it doesn't re-run
+        // 
         await dbService.clearPendingTransaction?.(uid);
 
         // Refresh UI + clean query params (replace avoids router push loops)
@@ -318,7 +321,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
       await paymentService.fundWallet(
         currentUser.uid,
         fundAmount,
-        currentUser.email // ✅ FIXED
+        currentUser.email // FIXED
       );
     } catch (err) {
       console.error("Fund wallet init failed:", err);
@@ -378,7 +381,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
 
       await paymentService.directCoursePurchase(
         currentUser.uid,
-        currentUser.email, // ✅ FIXED
+        currentUser.email, 
         examType,
         subject,
         price
