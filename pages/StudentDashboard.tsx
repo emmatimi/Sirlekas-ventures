@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { auth } from "../services/firebase";
 import { User, ExamResult, Question } from "../types";
 import { dbService } from "../services/dbService";
 import { paymentService } from "../services/paymentService";
@@ -291,23 +292,40 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
   }, [results]);
 
   const handleFundWallet = useCallback(async () => {
-    // Use a sane minimum: defaultCoursePrice (or 1 if you prefer)
     const min = Math.max(defaultCoursePrice, 1);
+
     if (fundAmount < min) {
       setError(`Minimum funding amount is ₦${min}.`);
       return;
     }
 
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      setError("User not logged in.");
+      return;
+    }
+
+    if (!currentUser.email || currentUser.email.trim() === "") {
+      setError("User email not available. Please sign in again.");
+      return;
+    }
+
     setIsProcessing(true);
     setError("");
+
     try {
-      await paymentService.fundWallet(uid, fundAmount, safeEmail);
+      await paymentService.fundWallet(
+        currentUser.uid,
+        fundAmount,
+        currentUser.email // ✅ FIXED
+      );
     } catch (err) {
       console.error("Fund wallet init failed:", err);
       setError("Monnify gateway unavailable. Check your internet connection.");
       setIsProcessing(false);
     }
-  }, [defaultCoursePrice, fundAmount, safeEmail, uid]);
+  }, [defaultCoursePrice, fundAmount]);
 
   const handleUnlockCourse = useCallback(async () => {
     if (!courseToUnlock) return;
@@ -344,7 +362,27 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
       // Direct payment amount uses course price
       setIsProcessing(true);
       try {
-        await paymentService.directCoursePurchase(uid, safeEmail, examType, subject, price);
+       const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        setError("User not logged in.");
+        setIsProcessing(false);
+        return;
+      }
+
+      if (!currentUser.email || currentUser.email.trim() === "") {
+        setError("User email not available. Please sign in again.");
+        setIsProcessing(false);
+        return;
+      }
+
+      await paymentService.directCoursePurchase(
+        currentUser.uid,
+        currentUser.email, // ✅ FIXED
+        examType,
+        subject,
+        price
+      );
       } catch (err) {
         console.error("Direct purchase init failed:", err);
         setError("Payment initialization failed.");

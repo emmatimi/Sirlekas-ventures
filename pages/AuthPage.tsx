@@ -44,7 +44,6 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
       return;
     }
 
-    // Popup / third-party sign-in issues
     if (/popup|redirect|timeout|cancel/i.test(code) || /popup|redirect|timeout|cancel/i.test(message)) {
       setError('Third-party sign-in was interrupted or timed out. Please try again.');
       return;
@@ -96,11 +95,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     setSuccess('');
 
     try {
-      // Use Firebase's standard reset which triggers a link
       await sendPasswordResetEmail(auth, email);
       
-      // We also trigger our styled EmailJS notification if needed, 
-      // but Firebase sends the actual functional link.
       setSuccess('Reset link sent to your email address!');
       setTimeout(() => setIsForgotPassword(false), 3000);
     } catch (err: any) {
