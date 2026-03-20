@@ -67,9 +67,9 @@ export default async function handler(req, res) {
       error.response?.data || error.message
     );
 
-    return res.status(500).json({
-      error: "Verification failed",
-      details: error.response?.data || error.message,
-    });
+return res.status(200).json({
+  status: "PENDING",
+  details: error.response?.data || error.message,
+});
   }
 }

@@ -298,9 +298,6 @@ const verifyWithRetry = async (retries = 6) => {
 
       handlePaymentRedirect();
 
-      return () => {
-        cancelled = true;
-      };
     }, [searchParams, refreshUser, safeEmail, safeName, setSearchParams, uid]);
 
   const uniqueExamTypes: string[] = useMemo(() => Array.from(new Set(questions.map((q) => q.examType))), [questions]);
