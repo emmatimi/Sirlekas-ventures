@@ -26,38 +26,28 @@ async function getMonnifyToken(apiKey, secretKey) {
 
 export default async function handler(req, res) {
   try {
+    // Only allow POST
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method Not Allowed" });
     }
 
     const { userId, examType, subject, email, amount } = req.body || {};
 
-    // Basic payload validation
-    const paymentType = examType === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_UNLOCK";
+    //  Validate required fields
+    if (!userId || !email || !amount) {
+      return res.status(400).json({
+        error: "Missing required fields (userId, email, amount)",
+      });
+    }
 
-const payload = {
-  amount: numericAmount,
-  currencyCode: "NGN",
-  contractCode: MONNIFY_CONTRACT_CODE,
+    // Convert & validate amount
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ error: "Invalid amount" });
+    }
 
-  paymentReference: transactionReference,
-  paymentDescription:
-    paymentType === "WALLET_FUND"
-      ? `Wallet Funding - Sirlekas`
-      : `Unlock ${subject || "item"} (${examType || "GENERAL"}) - Sirlekas`,
-
-  customerName: String(email).split("@")[0],
-  customerEmail: email,
-
-  paymentMethods: ["CARD", "ACCOUNT_TRANSFER"],
-
-  // ✅ IMPORTANT: redirect to dashboard
-  redirectUrl: `${APP_URL}/dashboard?payment=success&ref=${transactionReference}`,
-
-  // ✅ include enough meta for webhook/verify fallback
-  metaData: { userId, examType, subject, type: paymentType, amount: numericAmount },
-};
-
+    const paymentType =
+      examType === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_UNLOCK";
 
     const {
       MONNIFY_API_KEY,
@@ -68,7 +58,9 @@ const payload = {
 
     // Env validation
     if (!MONNIFY_BASE_URL) {
-      return res.status(500).json({ error: "MONNIFY_BASE_URL not configured" });
+      return res.status(500).json({
+        error: "MONNIFY_BASE_URL not configured",
+      });
     }
 
     if (!MONNIFY_API_KEY || !MONNIFY_SECRET_KEY || !MONNIFY_CONTRACT_CODE) {
@@ -83,35 +75,50 @@ const payload = {
       });
     }
 
-    // Transaction reference
+    //  Generate transaction reference
     const transactionReference = `SIRL-${examType || "GEN"}-${Date.now()}-${String(
       userId
     ).slice(0, 6)}`;
 
-    // Auth token
-    const token = await getMonnifyToken(MONNIFY_API_KEY, MONNIFY_SECRET_KEY);
+    // Get Monnify token
+    const token = await getMonnifyToken(
+      MONNIFY_API_KEY,
+      MONNIFY_SECRET_KEY
+    );
 
-    // ✅ Monnify init payload (use expected field names)
-    const payload = {
+    // Single clean payload (FIXED)
+    const paymentPayload = {
       amount: numericAmount,
       currencyCode: "NGN",
       contractCode: MONNIFY_CONTRACT_CODE,
 
-      // IMPORTANT: Monnify commonly expects these names
       paymentReference: transactionReference,
-      paymentDescription: `Unlock ${subject || "item"} (${examType || "GENERAL"}) - Sirlekas`,
+      paymentDescription:
+        paymentType === "WALLET_FUND"
+          ? `Wallet Funding - Sirlekas`
+          : `Unlock ${subject || "item"} (${examType || "GENERAL"}) - Sirlekas`,
 
       customerName: String(email).split("@")[0],
       customerEmail: email,
 
       paymentMethods: ["CARD", "ACCOUNT_TRANSFER"],
-      redirectUrl: `${APP_URL}/dashboard?payment=success&ref=${encodeURIComponent(transactionReference)}`,
 
-      metaData: { userId, examType, subject },
+      redirectUrl: `${APP_URL}/dashboard?payment=success&ref=${encodeURIComponent(
+        transactionReference
+      )}`,
+
+      metaData: {
+        userId,
+        examType,
+        subject,
+        type: paymentType,
+        amount: numericAmount,
+      },
     };
 
-    console.log("Monnify init payload:", payload);
+    console.log("Monnify init payload:", paymentPayload);
 
+    //  Call Monnify init API
     const initResp = await fetch(
       `${MONNIFY_BASE_URL}/merchant/transactions/init-transaction`,
       {
@@ -120,36 +127,39 @@ const payload = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(paymentPayload),
       }
     );
 
     const initData = await initResp.json();
 
     const checkoutUrl = initData?.responseBody?.checkoutUrl;
-    const paymentReference = initData?.responseBody?.paymentReference; // SIRL-...
-    const monnifyTransactionReference = initData?.responseBody?.transactionReference; // MNFY|...
+    const paymentReference =
+      initData?.responseBody?.paymentReference;
+    const monnifyTransactionReference =
+      initData?.responseBody?.transactionReference;
 
+    // Handle bad response from Monnify
     if (!checkoutUrl || !paymentReference) {
-      console.log("Monnify init response:", initData);
+      console.error("Monnify init response:", initData);
       return res.status(502).json({
         error: "Invalid Monnify init response",
         monnify: initData,
       });
     }
 
+    //  Success
     return res.status(200).json({
       checkoutUrl,
       paymentReference,
       monnifyTransactionReference,
     });
 
-
-
- 
-
   } catch (error) {
-    console.error("Monnify init error:", error?.message || error);
-    return res.status(500).json({ error: "Failed to initialize payment" });
+    console.error("Monnify init error:", error);
+
+    return res.status(500).json({
+      error: error.message || "Failed to initialize payment",
+    });
   }
 }
