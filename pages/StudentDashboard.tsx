@@ -178,12 +178,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
 
   //  Handle Monnify redirect callback (idempotent + replace)
   useEffect(() => {
-      const sp = new URLSearchParams(searchString);
+      const sp = new URLSearchParams(window.location.search);
 
       const paymentReference = sp.get("paymentReference");
       const transactionReference = sp.get("transactionReference");
 
-      const ref = paymentReference || transactionReference || "";
+      const ref = paymentReference || transactionReference;
 
       if (!ref) return;
 

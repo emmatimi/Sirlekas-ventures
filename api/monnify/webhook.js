@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const admin = require("firebase-admin");
+console.log("🔥 WEBHOOK HIT");
 
 /**
  * Disable body parsing so we can verify Monnify signature
@@ -42,10 +43,10 @@ module.exports = async function handler(req, res) {
       return res.status(500).send("Server misconfigured");
     }
 
-    // 🔐 Read raw body
+    //  Read raw body
     const rawBody = await getRawBody(req);
 
-    // 🔐 Verify signature
+    // Verify signature
     const signature = req.headers["monnify-signature"];
     const computedSignature = crypto
       .createHmac("sha512", MONNIFY_WEBHOOK_SECRET)
@@ -98,7 +99,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).send("Underpaid");
     }
 
-    // 🔒 Atomic write
+    //  Atomic write
     await db.runTransaction(async (t) => {
       t.set(txRef, {
         reference: paymentReference,
@@ -125,7 +126,7 @@ module.exports = async function handler(req, res) {
       }
     });
 
-    // 📧 Optional EmailJS notification (server-side)
+    //  Optional EmailJS notification (server-side)
     try {
       const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID;
       const EMAILJS_RECEIPT_TEMPLATE_ID = process.env.EMAILJS_RECEIPT_TEMPLATE_ID;
