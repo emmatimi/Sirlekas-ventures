@@ -221,6 +221,9 @@ const verifyWithRetry = async (retries = 6) => {
           setError("");
           setSuccessMessage("");
 
+          // ⏳ WAIT before first verify
+          await new Promise((r) => setTimeout(r, 4000));
+
           const verify = await verifyWithRetry();
 
           if (!verify?.verified) {
