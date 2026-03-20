@@ -45,7 +45,6 @@ export default async function handler(req, res) {
 
     let params = {};
 
-    //  PRIORITY: Use Monnify reference if available
     if (monnifyTransactionReference) {
       params.transactionReference = monnifyTransactionReference;
     } else {

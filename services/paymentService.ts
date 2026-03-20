@@ -105,11 +105,17 @@ export const paymentService = {
     window.location.href = checkoutUrl;
   },
 
-  verifyPayment: async (transactionReference: string) => {
+  verifyPayment: async (
+    paymentReference: string,
+    monnifyTransactionReference?: string
+  ) => {
     const resp = await fetch(VERIFY_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transactionReference }),
+      body: JSON.stringify({
+        paymentReference,
+        monnifyTransactionReference,
+      }),
     });
 
     if (!resp.ok) {
