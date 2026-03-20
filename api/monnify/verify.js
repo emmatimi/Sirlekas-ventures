@@ -16,6 +16,8 @@ async function getMonnifyToken(apiKey, secretKey) {
   return resp.data.responseBody.accessToken;
 }
 
+// ... existing getMonnifyToken function ...
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
@@ -27,7 +29,7 @@ export default async function handler(req, res) {
 
     if (!paymentReference && !monnifyTransactionReference) {
       return res.status(400).json({
-        error: "Provide paymentReference or monnifyTransactionReference",
+        error: "Missing transaction references",
       });
     }
 
@@ -37,9 +39,8 @@ export default async function handler(req, res) {
     );
 
     /**
-     * FIX: Monnify sometimes requires the transactionReference (MNFY|...) 
-     * if the internal paymentReference (SIRL-...) isn't yet indexed 
-     * in the query API.
+     * FIX: Use monnifyTransactionReference if available. 
+     * It is more reliable for direct API queries.
      */
     const params = {};
     if (monnifyTransactionReference) {
@@ -48,15 +49,13 @@ export default async function handler(req, res) {
       params.paymentReference = paymentReference;
     }
 
-    console.log("VERIFYING WITH PARAMS:", params);
+    console.log("VERIFYING WITH:", params);
 
     const response = await axios.get(
       `${MONNIFY_BASE_URL}/transactions/query`,
       {
         params,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       }
     );
 
@@ -65,18 +64,16 @@ export default async function handler(req, res) {
     const errorData = error.response?.data;
     console.error("VERIFY ERROR:", errorData || error.message);
 
-    // If Monnify explicitly says "not found", return a 404-style status 
-    // so the frontend knows to retry or wait for the webhook.
+    // If Monnify returns Code 99 (Not Found), we return a 200 with a custom status
+    // This prevents the frontend from crashing and allows it to keep retrying.
     if (errorData?.responseCode === "99") {
       return res.status(200).json({
-        status: "NOT_FOUND",
-        responseMessage: errorData.responseMessage,
+        requestSuccessful: true,
+        responseMessage: "Processing...",
+        responseBody: { paymentStatus: "PENDING" } 
       });
     }
 
-    return res.status(200).json({
-      status: "ERROR",
-      details: errorData || error.message,
-    });
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 }

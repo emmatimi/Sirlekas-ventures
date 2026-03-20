@@ -188,32 +188,46 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
       if (handledPaymentRef.current === paymentReference) return;
       handledPaymentRef.current = paymentReference;
 
-const verifyWithRetry = async (retries = 6) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      console.log("Verify attempt:", i + 1);
+const MAX_RETRIES = 5; // Total attempts (e.g., 5 attempts * 4s delay = 20 seconds)
 
-      const res = await paymentService.verifyPayment(uid);
-
-      return res;
-    } catch (err: any) {
-      console.log("Verify failed:", err.message);
-
-      //only retry for "not found"
-      if (
-        err.message?.includes("no transaction") ||
-        err.message?.includes("processing")
-      ) {
-        if (i === retries - 1) throw err;
-
-        await new Promise((r) => setTimeout(r, 2500));
-        continue;
-      }
-
-      throw err;
+const verifyWithRetry = useCallback(async (currentRetry = 0) => {
+  try {
+    const result = await paymentService.verifyPayment(uid);
+    
+    if (result.verified) {
+      // Success! Clean up and refresh
+      localStorage.removeItem("paymentReference");
+      localStorage.removeItem("monnifyTransactionReference");
+      window.location.search = ""; // Clear URL params
+      return;
     }
+  } catch (err: any) {
+    const errorMsg = err.message?.toLowerCase() || "";
+    
+    // If it's a "Not Found" or "Processing" error, we retry
+    if (
+      (errorMsg.includes("no transaction") || errorMsg.includes("processing")) &&
+      currentRetry < MAX_RETRIES
+    ) {
+      console.log(`Retry attempt ${currentRetry + 1} of ${MAX_RETRIES}...`);
+      
+      setTimeout(() => {
+        verifyWithRetry(currentRetry + 1);
+      }, 4000); // 4-second delay between retries
+      
+      return;
+    }
+
+    // If we've hit the limit or it's a hard error
+    console.error("Verification failed after retries:", err);
+    alert("We couldn't verify your payment immediately. It may take a few minutes to reflect in your wallet.");
+    
+    // Clean up to stop the spinner
+    localStorage.removeItem("paymentReference");
+    localStorage.removeItem("monnifyTransactionReference");
+    setSearchParams({}); // Remove query params to stop the effect
   }
-};
+}, [uid, setSearchParams]);
 
       const handlePaymentRedirect = async () => {
         try {
