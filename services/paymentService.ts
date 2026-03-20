@@ -1,5 +1,5 @@
 import { db } from "./firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, arrayUnion } from "firebase/firestore";
 const INIT_ENDPOINT = "/api/monnify/init";
 const VERIFY_ENDPOINT = "/api/monnify/verify";
 
@@ -62,6 +62,15 @@ export const paymentService = {
         type: "WALLET_FUND",
         timestamp: Date.now(),
       },
+      transactions: arrayUnion({
+      reference: paymentReference,
+      userId,
+      category: "WALLET_FUND",
+      amount,
+      status: "PENDING",
+      timestamp: Date.now(),
+    }),
+
     },
     { merge: true }
   );
@@ -125,6 +134,14 @@ export const paymentService = {
         type: "COURSE_UNLOCK",
         timestamp: Date.now(),
       },
+      transactions: arrayUnion({
+      reference: paymentReference,
+      userId,
+      category: "COURSE_PURCHASE",
+      amount: numericAmount,
+      status: "PENDING",
+      timestamp: Date.now(),
+    }),
       },
       { merge: true }
     );
@@ -133,27 +150,38 @@ export const paymentService = {
   },
 
     verifyPayment: async (userId: string) => {
-    const userDoc = await getDoc(doc(db, "users", userId));
+  const paymentReference = localStorage.getItem("paymentReference");
+  const monnifyTransactionReference = localStorage.getItem(
+    "monnifyTransactionReference"
+  );
 
-    if (!userDoc.exists()) {
-      throw new Error("User not found");
-    }
+  if (!paymentReference && !monnifyTransactionReference) {
+    throw new Error("No payment reference found");
+  }
 
-    const user = userDoc.data();
+  const resp = await fetch("/api/monnify/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      paymentReference,
+      monnifyTransactionReference,
+    }),
+  });
 
-    // Case 1: webhook completed
-    if (!user?.pendingTransaction) {
-      return { verified: true };
-    }
+  const data = await resp.json();
 
-    //  Case 2: still pending
-    const createdAt = user.pendingTransaction?.timestamp;
+  console.log("VERIFY RESPONSE:", data);
 
-    // optional timeout check (avoid infinite wait)
-    if (createdAt && Date.now() - createdAt > 5 * 60 * 1000) {
-      throw new Error("Payment delayed, please refresh");
-    }
+  const status = data?.responseBody?.paymentStatus;
 
+  if (status === "PAID") {
+    return { verified: true };
+  }
+
+  if (status === "PENDING") {
     throw new Error("Payment still processing");
-  },
+  }
+
+  throw new Error("Payment failed");
+},
 };

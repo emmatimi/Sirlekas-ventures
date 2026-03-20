@@ -320,6 +320,21 @@ async addTransaction(userId, tx) {
       timestamp: Date.now(),
     }),
   });
+},
+async updateTransactionStatus(userId, reference, status) {
+  const userRef = doc(db, "users", userId);
+  const snap = await getDoc(userRef);
+
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const transactions = data.transactions || [];
+
+  const updated = transactions.map((tx) =>
+    tx.reference === reference ? { ...tx, status } : tx
+  );
+
+  await updateDoc(userRef, { transactions: updated });
 }
 };
 

@@ -212,6 +212,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
             setSearchParams({}, { replace: true });
             return;
           }
+          await dbService.updateTransactionStatus(uid, paymentReference, "SUCCESS");
 
           if (
             pending.reference &&
