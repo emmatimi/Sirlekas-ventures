@@ -1,4 +1,4 @@
-const axios = require("axios");
+import axios from "axios";
 
 const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
 
@@ -24,7 +24,7 @@ async function getMonnifyToken(apiKey, secretKey) {
   return token;
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
       return res.status(405).send("Method Not Allowed");
@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
 
     const { transactionReference } = req.body || {};
     if (!transactionReference) {
-      return res.status(400).json({ error: "Missing transactionReference" });
+      return res.status(400).json({ error: "transactionReference is required" });
     }
 
     if (!MONNIFY_BASE_URL) {
