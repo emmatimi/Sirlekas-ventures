@@ -30,29 +30,31 @@ export default async function handler(req, res) {
       return res.status(405).send("Method Not Allowed");
     }
 
-    const { transactionReference } = req.body || {};
+    const body =
+      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
+    console.log("BODY:", body);
+
+    const { transactionReference } = body || {};
+
+    console.log("REFERENCE:", transactionReference);
+
     if (!transactionReference) {
-      return res.status(400).json({ error: "transactionReference is required" });
+      return res
+        .status(400)
+        .json({ error: "transactionReference is required" });
     }
 
-    if (!MONNIFY_BASE_URL) {
-      return res.status(500).json({ error: "MONNIFY_BASE_URL not configured" });
-    }
+    const token = await getMonnifyToken(
+      process.env.MONNIFY_API_KEY,
+      process.env.MONNIFY_SECRET_KEY
+    );
 
-    const MONNIFY_API_KEY = process.env.MONNIFY_API_KEY;
-    const MONNIFY_SECRET_KEY = process.env.MONNIFY_SECRET_KEY;
-
-    if (!MONNIFY_API_KEY || !MONNIFY_SECRET_KEY) {
-      return res.status(500).json({ error: "Monnify not configured" });
-    }
-
-    const token = await getMonnifyToken(MONNIFY_API_KEY, MONNIFY_SECRET_KEY);
-
-    const resp = await axios.get(
-      `${MONNIFY_BASE_URL}/transactions/query`,
+    const response = await axios.get(
+      `${process.env.MONNIFY_BASE_URL}/transactions/query`,
       {
         params: {
-          paymentReference: transactionReference, 
+          transactionReference, 
         },
         headers: {
           Authorization: `Bearer ${token}`,
@@ -60,19 +62,9 @@ export default async function handler(req, res) {
       }
     );
 
-    const transaction = resp.data?.responseBody;
-    if (!transaction) {
-      return res.status(404).json({ error: "Transaction not found" });
-    }
-
-    const status = transaction.paymentStatus;
-    return res.json({
-      verified: status === "PAID",
-      status,
-      transaction,
-    });
-  } catch (err) {
-    console.error("verify error", err?.response?.data || err?.message || err);
-    return res.status(500).json({ error: "Failed to verify payment" });
+    return res.status(200).json(response.data);
+  } catch (error) {
+    console.error("verify error", error.response?.data || error.message);
+    return res.status(500).json({ error: "Verification failed" });
   }
-};
+}
