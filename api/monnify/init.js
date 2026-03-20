@@ -117,17 +117,24 @@ export default async function handler(req, res) {
     console.log("Monnify init payload:", paymentPayload);
 
     //  Call Monnify init API
-    const initResp = await fetch(
-      `${MONNIFY_BASE_URL}/merchant/transactions/init-transaction`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(paymentPayload),
-      }
-    );
+console.log("LOCAL REF:", transactionReference);
+console.log("INIT PAYLOAD:", payload);
+
+const initResp = await axios.post(
+  `${MONNIFY_BASE_URL}/merchant/transactions/init-transaction`,
+  payload,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  }
+);
+
+console.log(
+  "INIT RESPONSE:",
+  JSON.stringify(initResp.data, null, 2)
+);
 
     const initData = await initResp.json();
 
@@ -160,4 +167,5 @@ export default async function handler(req, res) {
       error: error.message || "Failed to initialize payment",
     });
   }
+  
 }
