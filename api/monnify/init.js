@@ -33,20 +33,31 @@ export default async function handler(req, res) {
     const { userId, examType, subject, email, amount } = req.body || {};
 
     // Basic payload validation
-    if (!userId || !email || amount == null) {
-      return res.status(400).json({
-        error: "Missing required fields (userId, email, amount)",
-      });
-    }
+    const paymentType = examType === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_UNLOCK";
 
-    const numericAmount = Number(amount);
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      return res.status(400).json({ error: "Invalid amount" });
-    }
+const payload = {
+  amount: numericAmount,
+  currencyCode: "NGN",
+  contractCode: MONNIFY_CONTRACT_CODE,
 
-    if (typeof email !== "string" || !email.includes("@")) {
-      return res.status(400).json({ error: "Invalid email" });
-    }
+  paymentReference: transactionReference,
+  paymentDescription:
+    paymentType === "WALLET_FUND"
+      ? `Wallet Funding - Sirlekas`
+      : `Unlock ${subject || "item"} (${examType || "GENERAL"}) - Sirlekas`,
+
+  customerName: String(email).split("@")[0],
+  customerEmail: email,
+
+  paymentMethods: ["CARD", "ACCOUNT_TRANSFER"],
+
+  // ✅ IMPORTANT: redirect to dashboard
+  redirectUrl: `${APP_URL}/dashboard?payment=success&ref=${transactionReference}`,
+
+  // ✅ include enough meta for webhook/verify fallback
+  metaData: { userId, examType, subject, type: paymentType, amount: numericAmount },
+};
+
 
     const {
       MONNIFY_API_KEY,

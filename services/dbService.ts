@@ -32,45 +32,63 @@ const FALLBACK_QUOTES: InspirationalQuote[] = [
   { id: 'q1', text: "Excellence is not a destination, it's a continuous journey.", author: "Sirlekas Ventures" }
 ];
 
+const PRICING_DOC = 'settings/coursePrices';
+const makeCourseKey = (examType: string, subject: string) => `${examType}_${subject}`;
+
 // ✅ Vite-safe env usage
 const isFirebaseReady = () => !!db && !!import.meta.env.VITE_FIREBASE_API_KEY;
-
+ 
 export const dbService = {
-  syncUser: async (firebaseUser: any, role: string = 'student'): Promise<User> => {
-    if (!isFirebaseReady()) {
-      return {
-        uid: firebaseUser.uid || 'mock-uid',
-        name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Demo User',
-        email: firebaseUser.email || 'demo@example.com',
-        role: role as any,
-        avatar: firebaseUser.photoURL || '',
-        walletBalance: 0,
-        purchasedCourses: [],
-        createdAt: Date.now()
-      };
-    }
-
-    const userRef = doc(db, 'users', firebaseUser.uid);
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      return userSnap.data() as User;
-    }
-
-    const newUser: User = {
-      uid: firebaseUser.uid,
-      name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
-      email: firebaseUser.email,
+ syncUser: async (firebaseUser: any, role: string = 'student'): Promise<User> => {
+  if (!isFirebaseReady()) {
+    return {
+      uid: firebaseUser.uid || 'mock-uid',
+      name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Demo User',
+      email: firebaseUser.email || 'demo@example.com',
       role: role as any,
       avatar: firebaseUser.photoURL || '',
       walletBalance: 0,
       purchasedCourses: [],
       createdAt: Date.now()
     };
+  }
 
-    await setDoc(userRef, newUser);
-    return newUser;
-  },
+  const userRef = doc(db, 'users', firebaseUser.uid);
+  const userSnap = await getDoc(userRef);
+
+  // ✅ Build canonical user fields (role always included)
+  const baseUser: User = {
+    uid: firebaseUser.uid,
+    name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+    email: firebaseUser.email,
+    role: role as any,
+    avatar: firebaseUser.photoURL || '',
+    walletBalance: 0,
+    purchasedCourses: [],
+    createdAt: Date.now()
+  };
+
+  if (userSnap.exists()) {
+    const existing = userSnap.data() as Partial<User>;
+
+    // ✅ Ensure role exists in Firestore (backfill)
+    const existingRole = (existing as any)?.role;
+    if (existingRole !== 'admin' && existingRole !== 'student') {
+      await updateDoc(userRef, { role: role as any });
+    }
+
+    // ✅ Return merged object, so UI always has role
+    return {
+      ...baseUser,
+      ...existing,
+      role: (existingRole === 'admin' || existingRole === 'student') ? (existingRole as any) : (role as any),
+    } as User;
+  }
+
+  await setDoc(userRef, baseUser);
+  return baseUser;
+},
+
 
   getUser: async (uid: string): Promise<User | null> => {
     if (!isFirebaseReady()) return null;
@@ -101,7 +119,7 @@ export const dbService = {
   isCoursePurchased: (user: User | null, examType: string, subject: string): boolean => {
     if (!user) return false;
     if (user.role === 'admin') return true;
-    const courseKey = `${examType}-${subject}`;
+    const courseKey = `${examType}_${subject}`;
     return user.purchasedCourses?.includes(courseKey) || false;
   },
 
@@ -116,7 +134,7 @@ export const dbService = {
   purchaseCourse: async (userId: string, examType: string, subject: string, cost: number = 300) => {
     if (!isFirebaseReady()) return;
     const userRef = doc(db, 'users', userId);
-    const courseKey = `${examType}-${subject}`;
+    const courseKey = `${examType}_${subject}`;
     try {
       await updateDoc(userRef, {
         walletBalance: increment(-cost),
@@ -227,6 +245,18 @@ export const dbService = {
     }
   },
 
+  // Return all stored course prices as a map { "EXAM__Subject": price }
+  getCoursePrices: async (): Promise<Record<string, number>> => {
+    if (!isFirebaseReady()) return {};
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'coursePrices'));
+      const data = snap.exists() ? (snap.data() as any) : {};
+      return data?.prices || {};
+    } catch (err) {
+      return {};
+    }
+  },
+
   saveQuote: async (quote: InspirationalQuote) => {
     if (!isFirebaseReady()) return;
     await setDoc(doc(db, 'quotes', quote.id), quote);
@@ -235,5 +265,52 @@ export const dbService = {
   deleteQuote: async (id: string) => {
     if (!isFirebaseReady()) return;
     await deleteDoc(doc(db, 'quotes', id));
-  }
+  },
+
+ getCoursePrice: async (examType: string, subject: string): Promise<number> => {
+  if (!isFirebaseReady()) return 300;
+
+  const snap = await getDoc(doc(db, 'settings', 'coursePrices'));
+  const data = snap.exists() ? (snap.data() as any) : {};
+  const prices = data?.prices || {};
+  const key = makeCourseKey(examType, subject);
+
+  const v = prices[key];
+  if (Number.isFinite(Number(v))) return Number(v);
+
+  const def = data?.defaultPrice;
+  if (Number.isFinite(Number(def))) return Number(def);
+
+  return 300;
+},
+
+setCoursePrice: async (examType: string, subject: string, price: number) => {
+  if (!isFirebaseReady()) return;
+
+  const key = makeCourseKey(examType, subject);
+
+  await setDoc(
+    doc(db, 'settings', 'coursePrices'),
+    {
+      defaultPrice: 300,
+      prices: {
+        [key]: price,
+      },
+    },
+    { merge: true }
+  );
+},
+
+clearPendingTransaction: async (userId: string) => {
+  if (!isFirebaseReady()) return;
+  const userRef = doc(db, 'users', userId);
+
+  // If you prefer deleteField():
+  await updateDoc(userRef, {
+    pendingTransaction: deleteField(),
+  } as any);
+},
+
 };
+
+

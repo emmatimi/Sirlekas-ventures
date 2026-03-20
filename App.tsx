@@ -130,6 +130,9 @@ const App: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const menuRef = useRef<HTMLDivElement>(null);
+    const role = user?.role;
+  const hasValidRole = role === 'student' || role === 'admin';
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -240,7 +243,9 @@ const App: React.FC = () => {
             <div className="flex items-center space-x-4 z-[110]">
               {user ? (
                 <div className="hidden sm:flex items-center space-x-4">
-                  <span className="text-sm font-bold text-slate-900">{user.name.split('@')[0]}</span>
+                 <span className="text-sm font-bold text-slate-900">
+                  {(user?.name || user?.email || 'User').split('@')[0]}
+                </span>
                   <button onClick={handleLogout} className="bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-500 p-2.5 rounded-xl transition-all">
                     <i className="fas fa-sign-out-alt"></i>
                   </button>
@@ -325,7 +330,7 @@ const App: React.FC = () => {
                        <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=0047AB&color=fff`} alt={user.name} className="w-full h-full object-cover" />
                     </div>
                     <div>
-                      <p className="text-2xl font-black tracking-tight leading-none">{user.name.split('@')[0]}</p>
+                      <p className="text-2xl font-black tracking-tight leading-none">{(user.name || user.email || 'User').split('@')[0]}</p>
                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.25em] mt-3 bg-blue-400/10 px-3 py-1 rounded-lg">Verified {user.role}</p>
                     </div>
                   </div>
@@ -379,13 +384,35 @@ const App: React.FC = () => {
           </div>
         ) : (
           <Routes>
-            <Route path="/" element={<LandingPage user={user} />} />
-            <Route path="/auth" element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} /> : <AuthPage onLogin={setUser} />} />
-            <Route path="/dashboard" element={user?.role === 'student' ? <StudentDashboard user={user} /> : <Navigate to="/auth" />} />
-            <Route path="/test/:examType/:subject" element={user?.role === 'student' ? <CBTTest user={user} /> : <Navigate to="/auth" />} />
-            <Route path="/admin" element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/auth" />} />
-            <Route path="/cgpa-calculator" element={<CGPACalculator />} />
-          </Routes>
+                <Route path="/" element={<LandingPage user={user} />} />
+
+                <Route
+                  path="/auth"
+                  element={
+                    user && hasValidRole
+                      ? <Navigate to={role === 'admin' ? '/admin' : '/dashboard'} replace />
+                      : <AuthPage onLogin={setUser} />
+                  }
+                />
+
+                <Route
+                  path="/dashboard"
+                  element={user && role === 'student' ? <StudentDashboard user={user} /> : <Navigate to="/auth" replace />}
+                />
+
+                <Route
+                  path="/test/:examType/:subject"
+                  element={user && role === 'student' ? <CBTTest user={user} /> : <Navigate to="/auth" replace />}
+                />
+
+                <Route
+                  path="/admin"
+                  element={user && role === 'admin' ? <AdminDashboard /> : <Navigate to="/auth" replace />}
+                />
+
+                <Route path="/cgpa-calculator" element={<CGPACalculator />} />
+              </Routes>
+
         )}
       </main>
 

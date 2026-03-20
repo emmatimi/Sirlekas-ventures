@@ -11,7 +11,7 @@ export interface User {
   purchasedCourses?: string[]; // format: "examType-subject"
   walletBalance: number;
   createdAt: number;
-   pendingTransaction?: PendingTransaction;
+  pendingTransaction?: PendingTransaction;
 }
 
 export interface Question {
@@ -56,4 +56,8 @@ export type PendingTransaction = {
   examType?: string;
   subject?: string;
   timestamp: number;
+};
+
+export type PricingSettings = {
+  coursePrice: number;
 };

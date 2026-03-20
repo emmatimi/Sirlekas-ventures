@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Question, ExamResult, InspirationalQuote } from '../types';
 import { dbService } from '../services/dbService';
 
@@ -13,6 +13,10 @@ const AdminDashboard: React.FC = () => {
   const [editingQuestion, setEditingQuestion] = useState<Partial<Question> | null>(null);
   const [editingQuote, setEditingQuote] = useState<Partial<InspirationalQuote> | null>(null);
   const [questionSearch, setQuestionSearch] = useState('');
+  const [coursePrices, setCoursePrices] = useState<Record<string, number>>({});
+  const [priceDraft, setPriceDraft] = useState<Record<string, number>>({});
+  const [priceMessage, setPriceMessage] = useState('');
+
 
   // Bulk Upload State
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -28,19 +32,46 @@ const AdminDashboard: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    refreshData();
-  }, []);
+const getPriceKey = (examType: string, subject: string) => `${examType}_${subject}`;
+const getCoursePrice = (examType: string, subject: string) =>
+  priceDraft[getPriceKey(examType, subject)] ?? coursePrices[getPriceKey(examType, subject)] ?? 300;
 
-  const refreshData = async () => {
-    const allQs = await dbService.getQuestions();
-    setQuestions(allQs);
-    const allResults = await dbService.getResults();
-    console.log('Admin Dashboard: Loaded results:', allResults);
-    setResults(allResults);
-    const allQuotes = await dbService.getQuotes();
-    setQuotes(allQuotes);
-  };
+const refreshData = useCallback(async () => {
+  const [allQs, allResults, allQuotes, prices] = await Promise.all([
+    dbService.getQuestions(),
+    dbService.getResults(),
+    dbService.getQuotes(),
+    dbService.getCoursePrices(),
+  ]);
+
+  setQuestions(allQs);
+  setResults(allResults);
+  setQuotes(allQuotes);
+  setCoursePrices(prices || {});
+  setPriceDraft(prices || {});
+}, []);
+
+useEffect(() => {
+  void refreshData();
+}, [refreshData]);
+
+
+
+const saveCoursePrice = async (examType: string, subject: string) => {
+  const price = Number(getCoursePrice(examType, subject));
+  try {
+    await dbService.setCoursePrice(examType, subject, price);
+    setPriceMessage(`Saved price for ${subject}: ₦${price}`);
+    await refreshData();
+  } catch (err: any) {
+    console.error('setCoursePrice failed', err);
+    const msg = err?.message || 'Failed to save price.';
+    setPriceMessage(`Error saving price: ${msg}`);
+  } finally {
+    setTimeout(() => setPriceMessage(''), 4000);
+  }
+};
+
 
   const groupedQuestions = useMemo(() => {
     const groups: Record<string, { examType: string; subject: string; questions: Question[] }> = {};
@@ -55,7 +86,7 @@ const AdminDashboard: React.FC = () => {
       : questions;
 
     filtered.forEach(q => {
-      const key = `${q.examType}-${q.subject}`;
+      const key = `${q.examType}_${q.subject}`;
       if (!groups[key]) {
         groups[key] = { examType: q.examType, subject: q.subject, questions: [] };
       }
@@ -68,7 +99,7 @@ const AdminDashboard: React.FC = () => {
   const courses = useMemo(() => {
     const courseMap: { [key: string]: { examType: string; subject: string; count: number } } = {};
     questions.forEach(q => {
-      const key = `${q.examType}-${q.subject}`;
+      const key = `${q.examType}_${q.subject}`;
       if (!courseMap[key]) {
         courseMap[key] = { examType: q.examType, subject: q.subject, count: 0 };
       }
@@ -358,7 +389,7 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Main Admin UI Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-8">
+   <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-8">
         <div>
           <p className="text-blue-600 font-black uppercase tracking-widest text-[10px] mb-2">Excellence Hub Control</p>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">Super Admin Console</h1>
@@ -369,40 +400,89 @@ const AdminDashboard: React.FC = () => {
             { id: 'courses', label: 'Course List' },
             { id: 'questions', label: 'Questions Hub' },
             { id: 'results', label: 'Performance' },
-            { id: 'quotes', label: 'Motivational' }
-          ].map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`px-5 py-2.5 rounded-xl font-bold transition-all text-xs ${activeTab === tab.id ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>
+            { id: 'quotes', label: 'Motivational' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`px-5 py-2.5 rounded-xl font-bold transition-all text-xs ${
+                activeTab === tab.id ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
               {tab.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Tab Contents */}
+      {/* Courses Tab */}
       {activeTab === 'courses' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {courses.map((course, idx) => (
-            <div key={idx} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 soft-shadow flex flex-col group relative">
-              <div className="flex justify-between items-start mb-6">
-                 <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded-lg border border-blue-100">{course.examType}</span>
-                 <div className="flex items-center gap-3">
-                   <div className="text-slate-400 text-xs font-bold"><i className="fas fa-list-ol mr-2"></i>{course.count} Qs</div>
-                   <button onClick={() => setCourseToDelete(course)} className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><i className="fas fa-trash-alt text-sm"></i></button>
-                 </div>
+          {courses.map((course, idx) => {
+            const key = `${course.examType}__${course.subject}`;
+            
+            return (
+              <div key={idx} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 soft-shadow flex flex-col group relative">
+                <div className="flex justify-between items-start mb-6">
+                  <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded-lg border border-blue-100">
+                    {course.examType}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-slate-400 text-xs font-bold">
+                      <i className="fas fa-list-ol mr-2"></i>
+                      {course.count} Qs
+                    </div>
+                    <button
+                      onClick={() => setCourseToDelete(course)}
+                      className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    >
+                      <i className="fas fa-trash-alt text-sm"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <h3 className="text-2xl font-black text-slate-900 mb-2">{course.subject}</h3>
+                <div className="mt-4 bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Course Price (₦)
+                  </p>
+                  <div className="flex gap-3 items-center">
+                    <input
+                      type="number"
+                      min={0}
+                      value={getCoursePrice(course.examType, course.subject)}
+                      onChange={(e) => {
+                        const key = `${course.examType}_${course.subject}`;
+                        setPriceDraft((prev) => ({ ...prev, [key]: Number(e.target.value) }));
+                      }}
+                      className="flex-grow px-4 py-3 rounded-xl bg-white border border-slate-200 outline-none font-black text-slate-900"
+                    />
+                    <button
+                      onClick={() => saveCoursePrice(course.examType, course.subject)}
+                      className="px-5 py-3 rounded-xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+
+
+                {/* Duplicate/old price-control removed; uses the top price input/save controls instead */}
+
+                <button
+                  onClick={() => {
+                    setActiveTab('questions');
+                    setQuestionSearch(course.subject);
+                  }}
+                  className="mt-6 text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 flex items-center"
+                >
+                  Manage Questions <i className="fas fa-chevron-right ml-2"></i>
+                </button>
               </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-2">{course.subject}</h3>
-              <button 
-                onClick={() => {
-                  setActiveTab('questions');
-                  setQuestionSearch(course.subject);
-                }}
-                className="mt-6 text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 flex items-center"
-              >
-                Manage Questions <i className="fas fa-chevron-right ml-2"></i>
-              </button>
-            </div>
-          ))}
-          <button 
+            );
+          })}
+
+          <button
             onClick={() => setShowBulkModal(true)}
             className="border-2 border-dashed border-slate-200 rounded-[2.5rem] p-8 flex flex-col items-center justify-center hover:border-blue-400 hover:bg-blue-50/30 transition-all text-slate-400 group"
           >
@@ -413,6 +493,7 @@ const AdminDashboard: React.FC = () => {
           </button>
         </div>
       )}
+
 
       {activeTab === 'questions' && (
         <div className="space-y-12">
@@ -649,3 +730,4 @@ const AdminDashboard: React.FC = () => {
 };
 
 export default AdminDashboard;
+

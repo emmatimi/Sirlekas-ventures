@@ -44,7 +44,7 @@ const CBTTest: React.FC<CBTTestProps> = ({ user }) => {
       setTimeLeft(available.length * 60);
     };
     fetchQuestions();
-  }, [examType, subject, navigate, user]);
+  }, [examType, subject, navigate, user.uid]);
 
   const forceSubmit = useCallback(() => {
     const currentQuestions = questionsRef.current;

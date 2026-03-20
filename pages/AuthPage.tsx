@@ -44,6 +44,12 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
       return;
     }
 
+    // Popup / third-party sign-in issues
+    if (/popup|redirect|timeout|cancel/i.test(code) || /popup|redirect|timeout|cancel/i.test(message)) {
+      setError('Third-party sign-in was interrupted or timed out. Please try again.');
+      return;
+    }
+
     setError('Authentication failed. Please check your credentials.');
   };
 
