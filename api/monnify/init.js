@@ -1,11 +1,9 @@
 const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
 
 /**
- * Authenticate with Monnify (Basic Auth)
+ * Authenticate with Monnify
  */
 async function getMonnifyToken(apiKey, secretKey) {
-  if (!MONNIFY_BASE_URL) throw new Error("MONNIFY_BASE_URL not configured");
-
   const basic = Buffer.from(`${apiKey}:${secretKey}`).toString("base64");
 
   const resp = await fetch(`${MONNIFY_BASE_URL}/auth/login`, {
@@ -26,28 +24,22 @@ async function getMonnifyToken(apiKey, secretKey) {
 
 export default async function handler(req, res) {
   try {
-    // Only allow POST
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method Not Allowed" });
     }
 
     const { userId, examType, subject, email, amount } = req.body || {};
 
-    //  Validate required fields
     if (!userId || !email || !amount) {
       return res.status(400).json({
         error: "Missing required fields (userId, email, amount)",
       });
     }
 
-    // Convert & validate amount
     const numericAmount = Number(amount);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       return res.status(400).json({ error: "Invalid amount" });
     }
-
-    const paymentType =
-      examType === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_UNLOCK";
 
     const {
       MONNIFY_API_KEY,
@@ -56,49 +48,30 @@ export default async function handler(req, res) {
       APP_URL,
     } = process.env;
 
-    // Env validation
-    if (!MONNIFY_BASE_URL) {
-      return res.status(500).json({
-        error: "MONNIFY_BASE_URL not configured",
-      });
+    if (!MONNIFY_BASE_URL || !MONNIFY_API_KEY || !MONNIFY_SECRET_KEY || !MONNIFY_CONTRACT_CODE) {
+      return res.status(500).json({ error: "Monnify env not configured" });
     }
 
-    if (!MONNIFY_API_KEY || !MONNIFY_SECRET_KEY || !MONNIFY_CONTRACT_CODE) {
-      return res.status(500).json({
-        error: "Monnify environment variables not configured",
-      });
-    }
+    const localReference = `SIRL-${examType || "GEN"}-${Date.now()}-${String(userId).slice(0, 6)}`;
 
-    if (!APP_URL) {
-      return res.status(500).json({
-        error: "APP_URL environment variable not configured",
-      });
-    }
-
-    //  Generate transaction reference
-    const transactionReference = `SIRL-${examType || "GEN"}-${Date.now()}-${String(
-      userId
-    ).slice(0, 6)}`;
-
-    // Get Monnify token
     const token = await getMonnifyToken(
       MONNIFY_API_KEY,
       MONNIFY_SECRET_KEY
     );
 
-    // Single clean payload (FIXED)
     const paymentPayload = {
       amount: numericAmount,
       currencyCode: "NGN",
       contractCode: MONNIFY_CONTRACT_CODE,
+      //reference
+      paymentReference: localReference,
 
-      paymentReference: transactionReference,
       paymentDescription:
-        paymentType === "WALLET_FUND"
-          ? `Wallet Funding - Sirlekas`
-          : `Unlock ${subject || "item"} (${examType || "GENERAL"}) - Sirlekas`,
+        examType === "WALLET_FUND"
+          ? "Wallet Funding - Sirlekas"
+          : `Unlock ${subject || "item"}`,
 
-      customerName: String(email).split("@")[0],
+      customerName: email.split("@")[0],
       customerEmail: email,
 
       paymentMethods: ["CARD", "ACCOUNT_TRANSFER"],
@@ -109,17 +82,12 @@ export default async function handler(req, res) {
         userId,
         examType,
         subject,
-        type: paymentType,
         amount: numericAmount,
       },
     };
 
-    console.log("Monnify init payload:", paymentPayload)
-    console.log("LOCAL REF:", transactionReference);
-console.log("INIT PAYLOAD:", payload);
+    console.log("INIT PAYLOAD:", paymentPayload);
 
-
-    //  Call Monnify init API
     const initResp = await fetch(
       `${MONNIFY_BASE_URL}/merchant/transactions/init-transaction`,
       {
@@ -131,41 +99,34 @@ console.log("INIT PAYLOAD:", payload);
         body: JSON.stringify(paymentPayload),
       }
     );
-    console.log(
-  "INIT RESPONSE:",
-  JSON.stringify(initResp.data, null, 2)
-);
 
     const initData = await initResp.json();
 
+    console.log("INIT RESPONSE:", JSON.stringify(initData, null, 2));
+
     const checkoutUrl = initData?.responseBody?.checkoutUrl;
-    const paymentReference =
-      initData?.responseBody?.paymentReference;
+    const paymentReference = initData?.responseBody?.paymentReference;
     const monnifyTransactionReference =
       initData?.responseBody?.transactionReference;
 
-    // Handle bad response from Monnify
     if (!checkoutUrl || !paymentReference) {
-      console.error("Monnify init response:", initData);
       return res.status(502).json({
         error: "Invalid Monnify init response",
         monnify: initData,
       });
     }
 
-    //  Success
     return res.status(200).json({
       checkoutUrl,
+      // Send BOTH refs
       paymentReference,
       monnifyTransactionReference,
+      localReference,
     });
-
   } catch (error) {
-    console.error("Monnify init error:", error);
-
+    console.error("Init error:", error);
     return res.status(500).json({
       error: error.message || "Failed to initialize payment",
     });
   }
-  
 }

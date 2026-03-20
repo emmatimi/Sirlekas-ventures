@@ -3,25 +3,17 @@ import axios from "axios";
 const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
 
 async function getMonnifyToken(apiKey, secretKey) {
-  if (!MONNIFY_BASE_URL) throw new Error("MONNIFY_BASE_URL not configured");
-
   const basic = Buffer.from(`${apiKey}:${secretKey}`).toString("base64");
 
   const resp = await axios.post(
     `${MONNIFY_BASE_URL}/auth/login`,
-    null,
+    {},
     {
       headers: { Authorization: `Basic ${basic}` },
     }
   );
 
-  const token = resp.data?.responseBody?.accessToken;
-  if (!token) {
-    console.error("Monnify auth response:", resp.data);
-    throw new Error("Failed to obtain Monnify access token");
-  }
-
-  return token;
+  return resp.data.responseBody.accessToken;
 }
 
 export default async function handler(req, res) {
@@ -35,14 +27,15 @@ export default async function handler(req, res) {
 
     console.log("BODY:", body);
 
-    const { transactionReference } = body || {};
+    const {
+      paymentReference,                
+      monnifyTransactionReference,     
+    } = body || {};
 
-    console.log("REFERENCE:", transactionReference);
-
-    if (!transactionReference) {
-      return res
-        .status(400)
-        .json({ error: "transactionReference is required" });
+    if (!paymentReference && !monnifyTransactionReference) {
+      return res.status(400).json({
+        error: "Provide paymentReference or monnifyTransactionReference",
+      });
     }
 
     const token = await getMonnifyToken(
@@ -50,21 +43,39 @@ export default async function handler(req, res) {
       process.env.MONNIFY_SECRET_KEY
     );
 
+    let params = {};
+
+    //  PRIORITY: Use Monnify reference if available
+    if (monnifyTransactionReference) {
+      params.transactionReference = monnifyTransactionReference;
+    } else {
+      params.paymentReference = paymentReference;
+    }
+
+    console.log("VERIFY PARAMS:", params);
+
     const response = await axios.get(
-      `${process.env.MONNIFY_BASE_URL}/transactions/query`,
+      `${MONNIFY_BASE_URL}/transactions/query`,
       {
-        params: {
-          transactionReference, 
-        },
+        params,
         headers: {
           Authorization: `Bearer ${token}`,
         },
       }
     );
 
+    console.log("VERIFY SUCCESS:", response.data);
+
     return res.status(200).json(response.data);
   } catch (error) {
-    console.error("verify error", error.response?.data || error.message);
-    return res.status(500).json({ error: "Verification failed" });
+    console.error(
+      "VERIFY ERROR:",
+      error.response?.data || error.message
+    );
+
+    return res.status(500).json({
+      error: "Verification failed",
+      details: error.response?.data || error.message,
+    });
   }
 }
