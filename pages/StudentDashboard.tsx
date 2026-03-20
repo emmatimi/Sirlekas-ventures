@@ -188,8 +188,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
 
 
 
-
-
     // prevent re-running
     if (handledPaymentRef.current === paymentReference) return;
     handledPaymentRef.current = paymentReference;

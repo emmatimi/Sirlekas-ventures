@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       `${MONNIFY_BASE_URL}/transactions/query`,
       {
         params: {
-          transactionReference, 
+          paymentReference: transactionReference, 
         },
         headers: {
           Authorization: `Bearer ${token}`,
