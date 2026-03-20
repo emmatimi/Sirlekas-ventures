@@ -189,6 +189,23 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
       handledPaymentRef.current = paymentReference;
 
       let cancelled = false;
+      const verifyWithRetry = async (retries = 5) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          console.log("Attempt verify:", i + 1);
+
+          const res = await paymentService.verifyPayment(uid);
+
+          return res;
+        } catch (err: any) {
+          if (i === retries - 1) throw err;
+
+          console.log("Retrying in 2s...");
+
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      }
+    };
 
       const handlePaymentRedirect = async () => {
         try {
@@ -213,6 +230,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
             return;
           }
           await dbService.updateTransactionStatus(uid, paymentReference, "SUCCESS");
+          await dbService.addToWallet(uid, pending.amount);
 
           if (
             pending.reference &&

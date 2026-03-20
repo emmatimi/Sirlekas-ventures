@@ -43,14 +43,9 @@ export default async function handler(req, res) {
       process.env.MONNIFY_SECRET_KEY
     );
 
-    let params = {};
-
-    if (monnifyTransactionReference) {
-      params.transactionReference = monnifyTransactionReference;
-    } else {
-      params.paymentReference = paymentReference;
-    }
-
+    const params = {
+      paymentReference,
+    };
     console.log("VERIFY PARAMS:", params);
 
     const response = await axios.get(
