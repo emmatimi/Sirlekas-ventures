@@ -201,7 +201,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         setSuccessMessage("");
 
         //  Verify payment with backend
-        const verify = await paymentService.verifyPayment(cleanRef);
+        const verify = await paymentService.verifyPayment();
 
         if (!verify?.verified) {
           throw new Error(`Payment not verified. Status: ${verify?.status || "UNKNOWN"}`);
