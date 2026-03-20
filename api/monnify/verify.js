@@ -49,13 +49,17 @@ export default async function handler(req, res) {
     const token = await getMonnifyToken(MONNIFY_API_KEY, MONNIFY_SECRET_KEY);
 
     const resp = await axios.get(
-      `${MONNIFY_BASE_URL}/merchant/transactions/query`,
+      `${MONNIFY_BASE_URL}/transactions/query`,
       {
-        params: { reference: transactionReference },
-        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          paymentReference: transactionReference, 
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       }
     );
-    
+
     const transaction = resp.data?.responseBody;
     if (!transaction) {
       return res.status(404).json({ error: "Transaction not found" });
