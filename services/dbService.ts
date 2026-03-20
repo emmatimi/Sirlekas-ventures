@@ -310,7 +310,18 @@ clearPendingTransaction: async (userId: string) => {
     pendingTransaction: deleteField(),
   } as any);
 },
+async addTransaction(userId, tx) {
+  const userRef = doc(db, "users", userId);
 
+  await updateDoc(userRef, {
+    transactions: arrayUnion({
+      ...tx,
+      id: `TX-${Date.now()}`,
+      timestamp: Date.now(),
+    }),
+  });
+}
 };
+
 
 

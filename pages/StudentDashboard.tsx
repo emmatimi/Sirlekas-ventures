@@ -18,6 +18,15 @@ interface PendingTransaction {
   subject?: string;
   timestamp?: number;
 }
+interface Transaction {
+  id: string;
+  type: "WALLET_FUND" | "COURSE_UNLOCK";
+  amount: number;
+  reference: string;
+  status: "SUCCESS";
+  item?: string;
+  timestamp: number;
+}
 
 interface StudentDashboardProps {
   user: User;
@@ -51,6 +60,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   // Prevent Monnify redirect handler re-running 
   const handledPaymentRef = useRef<string | null>(null);
@@ -87,22 +97,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     const refreshed = await dbService.getUser(uid);
     if (!refreshed) return;
 
-    // Avoid noisy re-renders if wallet/purchases didn't change
-    setUser((prev) => {
-      const prevSig = JSON.stringify({
-        uid: prev.uid,
-        walletBalance: prev.walletBalance,
-        purchasedCourses: prev.purchasedCourses,
-        role: (prev as any)?.role,
-      });
-      const nextSig = JSON.stringify({
-        uid: refreshed.uid,
-        walletBalance: refreshed.walletBalance,
-        purchasedCourses: refreshed.purchasedCourses,
-        role: (refreshed as any)?.role,
-      });
-      return prevSig === nextSig ? prev : refreshed;
-    });
+    setUser(refreshed);
+
+    setTransactions(
+      Array.isArray((refreshed as any)?.transactions)
+        ? (refreshed as any).transactions
+        : []
+    );
   }, [uid]);
 
   // Load dashboard data + pricing
@@ -176,110 +177,120 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     };
   }, [courseToUnlock, defaultCoursePrice, getLocalPrice]);
 
-  //  Handle Monnify redirect callback (idempotent + replace)
-  useEffect(() => {
-      const paymentReference = searchParams.get("paymentReference");
+    useEffect(() => {
+      const paymentReferenceFromUrl = searchParams.get("paymentReference");
+      const storedReference = localStorage.getItem("paymentReference");
 
-        console.log("PAYMENT REF:", paymentReference);
+      const paymentReference = paymentReferenceFromUrl || storedReference;
 
-        if (!paymentReference) return;
+      if (!paymentReference) return;
 
-        const cleanRef = paymentReference.split("?")[0];
+      if (handledPaymentRef.current === paymentReference) return;
+      handledPaymentRef.current = paymentReference;
 
+      let cancelled = false;
 
+      const handlePaymentRedirect = async () => {
+        try {
+          setIsProcessing(true);
+          setError("");
+          setSuccessMessage("");
 
-    // prevent re-running
-    if (handledPaymentRef.current === paymentReference) return;
-    handledPaymentRef.current = paymentReference;
+          const verify = await paymentService.verifyPayment(uid);
 
-    let cancelled = false;
-
-    const handlePaymentRedirect = async () => {
-      try {
-        setIsProcessing(true);
-        setError("");
-        setSuccessMessage("");
-
-        //  Verify payment with backend
-        const verify = await paymentService.verifyPayment();
-
-        if (!verify?.verified) {
-          throw new Error(`Payment not verified. Status: ${verify?.status || "UNKNOWN"}`);
-        }
-
-        // Fetch latest user from Firestore to read pendingTransaction
-        const refreshed = await dbService.getUser(uid);
-        const pending: PendingTransaction | undefined = (refreshed as any)?.pendingTransaction;
-
-        if (!pending) {
-          throw new Error("No pending transaction found. Please contact support with your payment reference.");
-        }
-
-        // Safety check: ensure reference matches
-        if (pending.reference && pending.reference !== paymentReference) {
-          throw new Error("Payment reference mismatch. Please contact support.");
-        }
-
-        // Apply based on pending.type
-        if (pending.type === "WALLET_FUND") {
-          await dbService.addToWallet(uid, pending.amount);
-
-          await emailService.sendPaymentReceipt({
-            to_name: safeName,
-            to_email: safeEmail,
-            transaction_type: "WALLET_FUND",
-            amount: pending.amount,
-            reference: paymentReference,
-          });
-
-          if (!cancelled) {
-            setSuccessMessage(`Wallet credited with ₦${pending.amount.toLocaleString()}! Receipt sent to email.`);
+          if (!verify?.verified) {
+            throw new Error("Payment not confirmed yet");
           }
-        } else {
-          const examType = pending.examType || "";
-          const subject = pending.subject || "";
 
-          if (!examType || !subject) {
-            throw new Error("Pending transaction missing examType/subject.");
+          const refreshed = await dbService.getUser(uid);
+          const pending: PendingTransaction | undefined =
+            (refreshed as any)?.pendingTransaction;
+
+          if (!pending) {
+            setSuccessMessage("Payment successful!");
+            await refreshUser();
+            setSearchParams({}, { replace: true });
+            return;
           }
-          await dbService.purchaseCourse(uid, examType, subject, 0);
 
-          await emailService.sendPaymentReceipt({
-            to_name: safeName,
-            to_email: safeEmail,
-            transaction_type: "COURSE_UNLOCK",
-            amount: pending.amount,
-            reference: paymentReference,
-            item_name: `${subject} (${examType})`,
-          });
-
-          if (!cancelled) {
-            setSuccessMessage(`${subject} unlocked successfully! Receipt sent to email.`);
+          if (
+            pending.reference &&
+            pending.reference !== paymentReference
+          ) {
+            throw new Error("Payment reference mismatch.");
           }
-        }
 
-        // 
-        await dbService.clearPendingTransaction?.(uid);
+          if (pending.type === "WALLET_FUND") {
+            await dbService.addToWallet(uid, pending.amount);
 
-        // Refresh UI + clean query params (replace avoids router push loops)
-        await refreshUser();
-        if (!cancelled) {
+            // ✅ ADD TRANSACTION
+            await dbService.addTransaction(uid, {
+              type: "WALLET_FUND",
+              amount: pending.amount,
+              reference: paymentReference,
+              status: "SUCCESS",
+            });
+
+            await emailService.sendPaymentReceipt({
+              to_name: safeName,
+              to_email: safeEmail,
+              transaction_type: "WALLET_FUND",
+              amount: pending.amount,
+              reference: paymentReference,
+            });
+
+            setSuccessMessage(
+              `Wallet credited with ₦${pending.amount.toLocaleString()}`
+            );
+          } else {
+            const examType = pending.examType || "";
+            const subject = pending.subject || "";
+
+            await dbService.purchaseCourse(uid, examType, subject, 0);
+
+            // ✅ ADD TRANSACTION
+            await dbService.addTransaction(uid, {
+              type: "COURSE_UNLOCK",
+              amount: pending.amount,
+              reference: paymentReference,
+              item: `${subject} (${examType})`,
+              status: "SUCCESS",
+            });
+
+            await emailService.sendPaymentReceipt({
+              to_name: safeName,
+              to_email: safeEmail,
+              transaction_type: "COURSE_UNLOCK",
+              amount: pending.amount,
+              reference: paymentReference,
+              item_name: `${subject} (${examType})`,
+            });
+
+            setSuccessMessage(`${subject} unlocked successfully!`);
+          }
+
+          await dbService.clearPendingTransaction?.(uid);
+
+          await refreshUser();
+
+          localStorage.removeItem("paymentReference");
+
           setSearchParams({}, { replace: true });
-          setTimeout(() => setSuccessMessage(""), 8000);
-        }
-      } catch (err: any) {
-        console.error("Payment confirmation failed:", err);
-        if (!cancelled) setError(err?.message || "Payment confirmation failed. Please contact support with your reference.");
-      } finally {
-        if (!cancelled) setIsProcessing(false);
-      }
-    };
 
-    void handlePaymentRedirect();
-    return () => {
-      cancelled = true;
-    };
-  }, [searchString, refreshUser, safeEmail, safeName, setSearchParams, uid]);
+          setTimeout(() => setSuccessMessage(""), 8000);
+        } catch (err: any) {
+          setError(err?.message || "Payment failed.");
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+
+      handlePaymentRedirect();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [searchParams, refreshUser, safeEmail, safeName, setSearchParams, uid]);
 
   const uniqueExamTypes: string[] = useMemo(() => Array.from(new Set(questions.map((q) => q.examType))), [questions]);
 
@@ -350,7 +361,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
           reference: ref,
           item_name: `${subject} (${examType})`,
         });
-
+        await dbService.addTransaction(uid, {
+        type: "COURSE_UNLOCK",
+        amount: price,
+        reference: ref,
+        item: `${subject} (${examType})`,
+        status: "SUCCESS",
+      });
         await refreshUser();
         setSuccessMessage(`${subject} unlocked using wallet! Receipt sent.`);
         setCourseToUnlock(null);
@@ -377,7 +394,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         setIsProcessing(false);
         return;
       }
-
+      
       await paymentService.directCoursePurchase(
         currentUser.uid,
         currentUser.email, 
@@ -707,6 +724,49 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
             </p>
           </div>
         </div>
+        <div className="space-y-10">
+        <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+          <i className="fas fa-receipt text-indigo-200"></i>
+          Transaction History
+        </h2>
+
+        <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 soft-shadow max-h-[400px] overflow-y-auto">
+          {transactions.length > 0 ? (
+            <div className="space-y-5">
+              {transactions
+                .slice()
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .map((tx) => (
+                  <div key={tx.id} className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm font-black text-slate-900">
+                        {tx.type === "WALLET_FUND"
+                          ? "Wallet Funding"
+                          : tx.item}
+                      </p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">
+                        {new Date(tx.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-sm font-black text-emerald-600">
+                        ₦{tx.amount.toLocaleString()}
+                      </div>
+                      <div className="text-[9px] text-slate-300">
+                        {tx.reference}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <p className="text-center text-slate-400 text-sm">
+              No transactions yet
+            </p>
+          )}
+        </div>
+      </div>
       </div>
     </div>
   );

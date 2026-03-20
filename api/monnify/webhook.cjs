@@ -94,15 +94,35 @@ module.exports = async function handler(req, res) {
       return res.status(200).send("Invalid amount");
     }
 
+    const userDoc = await userRef.get();
+    const pending = userDoc.data()?.pendingTransaction;
+
+    if (!pending) {
+      console.warn("No pending transaction");
+      return res.status(200).send("No pending");
+    }
+
+    if (pending.reference !== paymentReference) {
+      console.error("Reference mismatch");
+      return res.status(200).send("Mismatch");
+    }
+
+    if (Number(pending.amount) !== paidAmount) {
+      console.error("Amount mismatch");
+      return res.status(200).send("Amount mismatch");
+    }
+
     await db.runTransaction(async (t) => {
       t.set(txRef, {
         reference: paymentReference,
+        monnifyTransactionReference: eventData.transactionReference,
         status: "SUCCESS",
         amount: paidAmount,
         userId,
         examType: examType || null,
         subject: subject || null,
         type,
+        paymentMethod: eventData.paymentMethod || null,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 

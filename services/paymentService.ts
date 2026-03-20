@@ -1,6 +1,5 @@
 import { db } from "./firebase";
-import { doc, setDoc } from "firebase/firestore";
-
+import { doc, setDoc, getDoc } from "firebase/firestore";
 const INIT_ENDPOINT = "/api/monnify/init";
 const VERIFY_ENDPOINT = "/api/monnify/verify";
 
@@ -133,41 +132,28 @@ export const paymentService = {
     window.location.href = checkoutUrl;
   },
 
-   verifyPayment: async () => {
-  const paymentReference = localStorage.getItem("paymentReference");
-  const monnifyTransactionReference = localStorage.getItem(
-    "monnifyTransactionReference"
-  );
+    verifyPayment: async (userId: string) => {
+    const userDoc = await getDoc(doc(db, "users", userId));
 
-  if (!paymentReference && !monnifyTransactionReference) {
-    throw new Error("Missing payment reference");
-  }
+    if (!userDoc.exists()) {
+      throw new Error("User not found");
+    }
 
-  const resp = await fetch("/api/monnify/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      paymentReference,
-      monnifyTransactionReference,
-    }),
-  });
+    const user = userDoc.data();
 
-  const data = await resp.json();
+    // Case 1: webhook completed
+    if (!user?.pendingTransaction) {
+      return { verified: true };
+    }
 
-  if (!resp.ok) {
-    throw new Error(data.error || "Payment verification failed");
-  }
+    //  Case 2: still pending
+    const createdAt = user.pendingTransaction?.timestamp;
 
-  const status = data?.responseBody?.paymentStatus;
+    // optional timeout check (avoid infinite wait)
+    if (createdAt && Date.now() - createdAt > 5 * 60 * 1000) {
+      throw new Error("Payment delayed, please refresh");
+    }
 
-  if (status !== "PAID") {
-    throw new Error(`Payment not completed (status: ${status || "UNKNOWN"})`);
-  }
-
-  // Prevent duplicate credit
-  localStorage.removeItem("paymentReference");
-  localStorage.removeItem("monnifyTransactionReference");
-
-  return data;
-},
+    throw new Error("Payment still processing");
+  },
 };
