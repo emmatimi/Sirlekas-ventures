@@ -103,7 +103,7 @@ export default async function handler(req, res) {
 
       paymentMethods: ["CARD", "ACCOUNT_TRANSFER"],
 
-      redirectUrl: `${APP_URL}/dashboard?`,
+      redirectUrl: `${APP_URL}/dashboard`,
 
       metaData: {
         userId,

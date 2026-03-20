@@ -178,20 +178,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
 
   //  Handle Monnify redirect callback (idempotent + replace)
   useEffect(() => {
-      const sp = new URLSearchParams(window.location.search);
+      const paymentReference = searchParams.get("paymentReference");
 
-      const paymentReference = sp.get("paymentReference");
-      const transactionReference = sp.get("transactionReference");
+        console.log("PAYMENT REF:", paymentReference);
 
-      const ref = paymentReference || transactionReference;
+        if (!paymentReference) return;
 
-      if (!ref) return;
+        const cleanRef = paymentReference.split("?")[0];
 
-      const cleanRef = ref.split("?")[0];
+
+
+
 
     // prevent re-running
-    if (handledPaymentRef.current === ref) return;
-    handledPaymentRef.current = ref;
+    if (handledPaymentRef.current === paymentReference) return;
+    handledPaymentRef.current = paymentReference;
 
     let cancelled = false;
 
@@ -217,7 +218,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         }
 
         // Safety check: ensure reference matches
-        if (pending.reference && pending.reference !== ref) {
+        if (pending.reference && pending.reference !== paymentReference) {
           throw new Error("Payment reference mismatch. Please contact support.");
         }
 
@@ -230,7 +231,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
             to_email: safeEmail,
             transaction_type: "WALLET_FUND",
             amount: pending.amount,
-            reference: ref,
+            reference: paymentReference,
           });
 
           if (!cancelled) {
@@ -250,7 +251,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
             to_email: safeEmail,
             transaction_type: "COURSE_UNLOCK",
             amount: pending.amount,
-            reference: ref,
+            reference: paymentReference,
             item_name: `${subject} (${examType})`,
           });
 

@@ -1,41 +1,41 @@
 const crypto = require("crypto");
 const admin = require("firebase-admin");
-console.log("🔥 WEBHOOK HIT");
 
-/**
- * Disable body parsing so we can verify Monnify signature
- */
 module.exports.config = {
   api: { bodyParser: false },
 };
 
-/**
- * Read raw request body (REQUIRED for webhook signature)
- */
 const getRawBody = (req) =>
   new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (chunk) => (data += chunk));
-    req.on("end", () => resolve(Buffer.from(data)));
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
 
-/**
- * Initialize Firebase Admin (once per cold start)
- */
 if (!admin.apps.length) {
   const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!sa) {
     console.warn("FIREBASE_SERVICE_ACCOUNT not set; webhook will not write to Firestore");
   } else {
-    const serviceAccount = JSON.parse(Buffer.from(sa, "base64").toString("utf8"));
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    try {
+      const serviceAccount = JSON.parse(Buffer.from(sa, "base64").toString("utf8"));
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } catch (e) {
+      console.error("Failed to initialize Firebase Admin:", e?.message || e);
+    }
   }
 }
 
 module.exports = async function handler(req, res) {
+  console.log("🔥 WEBHOOK HIT", req.method);
+
   try {
-    if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
+    if (req.method !== "POST") {
+      return res.status(405).send("Method Not Allowed");
+    }
 
     const MONNIFY_WEBHOOK_SECRET = process.env.MONNIFY_WEBHOOK_SECRET;
     if (!MONNIFY_WEBHOOK_SECRET) {
@@ -43,10 +43,8 @@ module.exports = async function handler(req, res) {
       return res.status(500).send("Server misconfigured");
     }
 
-    //  Read raw body
     const rawBody = await getRawBody(req);
 
-    // Verify signature
     const signature = req.headers["monnify-signature"];
     const computedSignature = crypto
       .createHmac("sha512", MONNIFY_WEBHOOK_SECRET)
@@ -58,20 +56,20 @@ module.exports = async function handler(req, res) {
       return res.status(401).send("Unauthorized");
     }
 
-    // Parse payload AFTER verification
     const payload = JSON.parse(rawBody.toString("utf8"));
     const { eventType, eventData } = payload || {};
 
-    // Only handle successful paid transactions
+    console.log("Webhook event:", eventType, eventData?.paymentStatus);
+
     if (eventType !== "SUCCESSFUL_TRANSACTION" || eventData?.paymentStatus !== "PAID") {
       return res.status(200).send("Ignored");
     }
 
-    const { paymentReference, amountPaid, customer, metaData } = eventData;
-    const { userId, examType, subject } = metaData || {};
+    const { paymentReference, amountPaid, customer, metaData } = eventData || {};
+    const { userId, examType, subject, type } = metaData || {};
 
-    if (!userId || !examType) {
-      console.warn("Webhook missing metadata");
+    if (!userId || !type) {
+      console.warn("Webhook missing metadata", metaData);
       return res.status(200).send("Invalid metadata");
     }
 
@@ -84,7 +82,6 @@ module.exports = async function handler(req, res) {
     const txRef = db.collection("transactions").doc(paymentReference);
     const userRef = db.collection("users").doc(userId);
 
-    // Prevent duplicate processing
     const existingTx = await txRef.get();
     if (existingTx.exists) {
       console.log("Duplicate transaction:", paymentReference);
@@ -92,27 +89,24 @@ module.exports = async function handler(req, res) {
     }
 
     const paidAmount = Number(amountPaid);
-
-    // Amount validation (adjust threshold if needed)
-    if (paidAmount < 300) {
-      console.warn("Underpayment detected:", amountPaid);
-      return res.status(200).send("Underpaid");
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      console.warn("Invalid paid amount:", amountPaid);
+      return res.status(200).send("Invalid amount");
     }
 
-    //  Atomic write
     await db.runTransaction(async (t) => {
       t.set(txRef, {
         reference: paymentReference,
         status: "SUCCESS",
         amount: paidAmount,
         userId,
-        examType,
+        examType: examType || null,
         subject: subject || null,
-        type: examType === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_UNLOCK",
+        type,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      if (examType === "WALLET_FUND") {
+      if (type === "WALLET_FUND") {
         t.update(userRef, {
           walletBalance: admin.firestore.FieldValue.increment(paidAmount),
           pendingTransaction: admin.firestore.FieldValue.delete(),
@@ -126,7 +120,6 @@ module.exports = async function handler(req, res) {
       }
     });
 
-    //  Optional EmailJS notification (server-side)
     try {
       const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID;
       const EMAILJS_RECEIPT_TEMPLATE_ID = process.env.EMAILJS_RECEIPT_TEMPLATE_ID;
@@ -143,11 +136,16 @@ module.exports = async function handler(req, res) {
             template_params: {
               to_name: customer?.name || "Customer",
               to_email: customer?.email,
-              transaction_type: examType === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_UNLOCK",
-              item_name: examType === "WALLET_FUND" ? "Wallet Funding" : `${subject} (${examType})`,
+              transaction_type: type,
+              item_name:
+                type === "WALLET_FUND"
+                  ? "Wallet Funding"
+                  : `${subject} (${examType})`,
               amount: paidAmount,
               reference: paymentReference,
-              date: new Date().toLocaleString("en-NG", { timeZone: "Africa/Lagos" }),
+              date: new Date().toLocaleString("en-NG", {
+                timeZone: "Africa/Lagos",
+              }),
             },
           }),
         });
