@@ -190,30 +190,29 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
 const verifyWithRetry = async (retries = 6) => {
   for (let i = 0; i < retries; i++) {
     try {
-      console.log("Verify attempt:", i + 1);
-
       const res = await paymentService.verifyPayment(uid);
 
-      return res;
+      if (res?.verified) return res;
+
+      // still pending → wait and retry
+      await new Promise((r) => setTimeout(r, 2500));
+
     } catch (err: any) {
-      console.log("Verify failed:", err.message);
-
-      //only retry for "not found"
+      // only break on REAL failure
       if (
-        err.message?.includes("no transaction") ||
-        err.message?.includes("processing")
+        err.message?.toLowerCase().includes("failed") ||
+        err.message?.toLowerCase().includes("cancel")
       ) {
-        if (i === retries - 1) throw err;
-
-        await new Promise((r) => setTimeout(r, 2500));
-        continue;
+        throw err;
       }
 
-      throw err;
+      await new Promise((r) => setTimeout(r, 2500));
     }
   }
-};
 
+  // after retries → still not confirmed
+  return { verified: false };
+};
       const handlePaymentRedirect = async () => {
         try {
           setIsProcessing(true);
