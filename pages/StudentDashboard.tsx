@@ -185,9 +185,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
           await new Promise((r) => setTimeout(r, 2500));
         } catch (err: any) {
           const msg = err.message?.toLowerCase() ?? "";
-          // FIX 3: break immediately on definitive failure or server error.
-          // verify.js now returns 503 for auth/network errors, which surfaces
-          // here as a thrown Error — we re-throw it so the outer catch handles it.
+          // Break immediately on definitive failure, cancellation, or server error.
+          // "payment failed" comes from verifyPayment when status is FAILED/CANCELLED.
+          // 503/500 come from the verify endpoint for auth/network errors.
           if (
             msg.includes("failed") ||
             msg.includes("cancel") ||
@@ -240,7 +240,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         setTimeout(() => setSuccessMessage(""), 8000);
       } catch (err: any) {
         console.error("FINAL ERROR:", err);
-        setError(err?.message || "Payment failed.");
+        // Always clean up localStorage on any terminal outcome so a stale
+        // reference never haunts the next page load.
+        localStorage.removeItem("paymentReference");
+        localStorage.removeItem("monnifyTransactionReference");
+        // Give the user a helpful message: distinguish abandoned checkout from
+        // a genuine payment failure.
+        const msg = err?.message?.toLowerCase() ?? "";
+        if (msg.includes("cancel")) {
+          setError("It looks like you closed the payment page. No charge was made — try again when you're ready.");
+        } else {
+          setError(err?.message || "Payment could not be confirmed. Please contact support if you were charged.");
+        }
+        // Clear the URL reference too so refreshing doesn't re-trigger the loop
+        setSearchParams({}, { replace: true });
       } finally {
         setIsProcessing(false);
       }

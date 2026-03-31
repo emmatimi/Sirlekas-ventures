@@ -75,8 +75,27 @@ export default async function handler(req, res) {
 
       console.log("VERIFY SUCCESS:", response.data);
 
-      // FIX 2: return Monnify's actual response directly.
-      // The dashboard reads data.responseBody.paymentStatus — preserve that shape.
+      // FIX 2: Monnify returns HTTP 200 with requestSuccessful=false and
+      // responseCode "99" when the reference doesn't exist — this happens when
+      // the user closes the checkout page without paying. It is NOT a pending
+      // payment. Return CANCELLED so the dashboard stops retrying immediately.
+      const topLevel = response.data || {};
+      const details  = topLevel.details || {};
+      const isNotFound =
+        topLevel.requestSuccessful === false ||
+        details.requestSuccessful === false ||
+        topLevel.responseCode === "99" ||
+        details.responseCode === "99";
+
+      if (isNotFound) {
+        console.warn("VERIFY: transaction not found (responseCode 99) — treating as CANCELLED");
+        return res.status(200).json({
+          responseBody: { paymentStatus: "CANCELLED" },
+          details: topLevel,
+        });
+      }
+
+      // Return Monnify's actual response — dashboard reads responseBody.paymentStatus
       return res.status(200).json(response.data);
 
     } catch (monnifyErr) {
