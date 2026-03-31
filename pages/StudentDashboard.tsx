@@ -4,7 +4,6 @@ import { auth } from "../services/firebase";
 import { User, ExamResult, Question } from "../types";
 import { dbService } from "../services/dbService";
 import { paymentService } from "../services/paymentService";
-import { emailService } from "../services/emailService";
 
 const DASHBOARD_EXAM_KEY = "student_dashboard_selected_exam";
 
@@ -221,77 +220,37 @@ const verifyWithRetry = async (retries = 6) => {
           setError("");
           setSuccessMessage("");
 
-          // ⏳ WAIT before first verify
           await new Promise((r) => setTimeout(r, 4000));
 
-          // TEMP FIX
-const verify = { verified: true };
+     
+          const verify = await verifyWithRetry();
 
           if (!verify?.verified) {
             throw new Error("Payment not confirmed yet");
           }
 
-          const refreshed = await dbService.getUser(uid);
-          const pending = refreshed?.pendingTransaction;
+            // Wait for webhook to process payment
+            let attempts = 0;
+            while (attempts < 10) {
+              const refreshed = await dbService.getUser(uid);
 
-          if (!pending) {
-            setSuccessMessage("Payment already processed!");
+              if (!refreshed?.pendingTransaction) {
+                break; // webhook has processed it
+              }
+
+              await new Promise((r) => setTimeout(r, 2000));
+              attempts++;
+            }
+
+            // refresh UI
             await refreshUser();
-            return;
-          }
 
-          // ✅ Safety check FIRST
-          if (
-            pending.reference &&
-            pending.reference !== paymentReference
-          ) {
-            throw new Error("Payment reference mismatch.");
-          }
+            localStorage.removeItem("paymentReference");
 
-          // ✅ APPLY PAYMENT ONCE (ONLY ONCE)
-          if (pending.type === "WALLET_FUND") {
-            await dbService.addToWallet(uid, pending.amount);
-          } else {
-            await dbService.purchaseCourse(
-              uid,
-              pending.examType,
-              pending.subject,
-              0
-            );
-          }
+            setSuccessMessage("Payment successful!");
+            setSearchParams({}, { replace: true });
 
-          // ✅ UPDATE TRANSACTION (NOT addTransaction again)
-          await dbService.updateTransactionStatus(
-            uid,
-            pending.reference,
-            "SUCCESS"
-          );
-
-          // ✅ SEND EMAIL
-          await emailService.sendPaymentReceipt({
-            to_name: safeName,
-            to_email: safeEmail,
-            transaction_type: pending.type,
-            amount: pending.amount,
-            reference: pending.reference,
-            item_name:
-              pending.type === "COURSE_UNLOCK"
-                ? `${pending.subject} (${pending.examType})`
-                : "Wallet Funding",
-          });
-
-          // ✅ CLEAR PENDING
-          await dbService.clearPendingTransaction(uid);
-
-          // ✅ CLEANUP
-          localStorage.removeItem("paymentReference");
-
-          setSuccessMessage("Payment successful!");
-          await refreshUser();
-
-          setSearchParams({}, { replace: true });
-
-          setTimeout(() => setSuccessMessage(""), 8000);
+            setTimeout(() => setSuccessMessage(""), 8000);
         } catch (err: any) {
           console.error("FINAL ERROR:", err);
           setError(err?.message || "Payment failed.");
@@ -364,15 +323,6 @@ const verify = { verified: true };
       try {
         const ref = `WAL-${Date.now()}`;
         await dbService.purchaseCourse(uid, examType, subject, price);
-
-        await emailService.sendPaymentReceipt({
-          to_name: safeName,
-          to_email: safeEmail,
-          transaction_type: "COURSE_UNLOCK",
-          amount: price,
-          reference: ref,
-          item_name: `${subject} (${examType})`,
-        });
         await dbService.addTransaction(uid, {
         type: "COURSE_UNLOCK",
         amount: price,
