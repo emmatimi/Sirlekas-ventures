@@ -159,7 +159,7 @@ export const paymentService = {
     throw new Error("No payment reference found");
   }
 
-  const resp = await fetch("/api/monnify/verify", {
+  const resp = await fetch(VERIFY_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -174,40 +174,18 @@ export const paymentService = {
 
   const status = data?.responseBody?.paymentStatus;
 
+
   if (status === "PAID") {
     return { verified: true };
   }
 
-    if (!status) {
-      throw new Error("no transaction");
-    }
 
-    if (status === "PENDING") {
-      throw new Error("processing");
-    }
+  if (status === "FAILED" || status === "CANCELLED") {
+    throw new Error("Payment failed");
+  }
 
-  const errorMessage =
-  data?.details?.responseMessage ||
-  data?.responseMessage ||
-  data?.error ||
-  "unknown error";
 
-if (status === "PAID") {
-  return { verified: true };
-}
-
-if (
-  errorMessage.toLowerCase().includes("no transaction") ||
-  errorMessage.toLowerCase().includes("not found")
-) {
-  throw new Error("no transaction");
-}
-
-if (status === "PENDING") {
-  throw new Error("processing");
-}
-
-throw new Error(errorMessage);
+  return { verified: false };
 },
 
 };

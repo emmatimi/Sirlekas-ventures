@@ -226,7 +226,9 @@ const verifyWithRetry = async (retries = 6) => {
           const verify = await verifyWithRetry();
 
           if (!verify?.verified) {
-            throw new Error("Payment not confirmed yet");
+            setError("Payment is still processing. Please wait or refresh.");
+            setIsProcessing(false);
+            return;
           }
 
             // Wait for webhook to process payment
