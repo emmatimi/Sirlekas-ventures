@@ -10,7 +10,7 @@ const DASHBOARD_EXAM_KEY = "student_dashboard_selected_exam";
 type PendingTxType = "WALLET_FUND" | "COURSE_UNLOCK";
 
 interface PendingTransaction {
-  reference: string; // paymentReference (SIRL-...)
+  reference: string;
   amount: number;
   type: PendingTxType;
   examType?: string;
@@ -22,7 +22,7 @@ interface Transaction {
   type: "WALLET_FUND" | "COURSE_UNLOCK";
   amount: number;
   reference: string;
-  status: "SUCCESS";
+  status: "SUCCESS" | "PENDING";
   item?: string;
   timestamp: number;
 }
@@ -34,16 +34,17 @@ interface StudentDashboardProps {
 const priceKey = (examType: string, subject: string) => `${examType}__${subject}`;
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }) => {
-  const uid = initialUser.uid; // stable identity for effects
+  const uid = initialUser.uid;
 
   const [searchParams, setSearchParams] = useSearchParams();
+  // FIX 1: derive a stable string from searchParams so the payment useEffect
+  // dep array uses a primitive, not the object reference that changes every render
   const searchString = searchParams.toString();
 
   const [user, setUser] = useState<User>(initialUser);
   const [results, setResults] = useState<ExamResult[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
 
-  // Pricing
   const [coursePrices, setCoursePrices] = useState<Record<string, number>>({});
   const [defaultCoursePrice, setDefaultCoursePrice] = useState<number>(300);
   const [unlockPrice, setUnlockPrice] = useState<number>(300);
@@ -52,7 +53,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     return localStorage.getItem(DASHBOARD_EXAM_KEY);
   });
 
-  // Wallet and Unlock States
   const [showFundModal, setShowFundModal] = useState(false);
   const [fundAmount, setFundAmount] = useState(300);
   const [courseToUnlock, setCourseToUnlock] = useState<{ examType: string; subject: string } | null>(null);
@@ -61,10 +61,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
   const [successMessage, setSuccessMessage] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  // Prevent Monnify redirect handler re-running 
   const handledPaymentRef = useRef<string | null>(null);
 
-  // If parent updates initialUser, sync local state
   useEffect(() => {
     setUser(initialUser);
   }, [initialUser]);
@@ -95,9 +93,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
   const refreshUser = useCallback(async () => {
     const refreshed = await dbService.getUser(uid);
     if (!refreshed) return;
-
     setUser(refreshed);
-
     setTransactions(
       Array.isArray((refreshed as any)?.transactions)
         ? (refreshed as any).transactions
@@ -105,7 +101,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     );
   }, [uid]);
 
-  // Load dashboard data + pricing
   useEffect(() => {
     let cancelled = false;
 
@@ -122,8 +117,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         setResults(Array.isArray(userResults) ? userResults : []);
         setQuestions(Array.isArray(allQuestions) ? allQuestions : []);
         setCoursePrices(prices || {});
-
-        //  add defaultPrice to dbService.getCoursePrices.
         setDefaultCoursePrice(300);
 
         await refreshUser();
@@ -141,13 +134,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     };
   }, [uid, refreshUser]);
 
-  // Persist selected exam type
   useEffect(() => {
     if (selectedExamType) localStorage.setItem(DASHBOARD_EXAM_KEY, selectedExamType);
     else localStorage.removeItem(DASHBOARD_EXAM_KEY);
   }, [selectedExamType]);
 
-  // When user selects a course to unlock, fetch authoritative price for that course
   useEffect(() => {
     let cancelled = false;
 
@@ -156,13 +147,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         setUnlockPrice(defaultCoursePrice);
         return;
       }
-
       const { examType, subject } = courseToUnlock;
-
       try {
         const p = await dbService.getCoursePrice(examType, subject);
         if (cancelled) return;
-
         const n = Number(p);
         setUnlockPrice(Number.isFinite(n) && n > 0 ? n : getLocalPrice(examType, subject));
       } catch {
@@ -171,109 +159,115 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     };
 
     void run();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [courseToUnlock, defaultCoursePrice, getLocalPrice]);
 
-    useEffect(() => {
-      const paymentReferenceFromUrl = searchParams.get("paymentReference");
-      const storedReference = localStorage.getItem("paymentReference");
+  // FIX 2: payment redirect handler
+  // - deps use `searchString` (primitive) not `searchParams` (object)
+  // - safeEmail / safeName removed from deps (not used inside the effect)
+  // - verifyWithRetry now breaks on ERROR status from the updated verify.js
+  // - both localStorage keys are cleared on success
+  useEffect(() => {
+    const paymentReferenceFromUrl = searchParams.get("paymentReference");
+    const storedReference = localStorage.getItem("paymentReference");
+    const paymentReference = paymentReferenceFromUrl || storedReference;
 
-      const paymentReference = paymentReferenceFromUrl || storedReference;
+    if (!paymentReference) return;
+    if (handledPaymentRef.current === paymentReference) return;
+    handledPaymentRef.current = paymentReference;
 
-      if (!paymentReference) return;
-
-      if (handledPaymentRef.current === paymentReference) return;
-      handledPaymentRef.current = paymentReference;
-
-const verifyWithRetry = async (retries = 6) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const res = await paymentService.verifyPayment(uid);
-
-      if (res?.verified) return res;
-
-      // still pending → wait and retry
-      await new Promise((r) => setTimeout(r, 2500));
-
-    } catch (err: any) {
-      // only break on REAL failure
-      if (
-        err.message?.toLowerCase().includes("failed") ||
-        err.message?.toLowerCase().includes("cancel")
-      ) {
-        throw err;
-      }
-
-      await new Promise((r) => setTimeout(r, 2500));
-    }
-  }
-
-  // after retries → still not confirmed
-  return { verified: false };
-};
-      const handlePaymentRedirect = async () => {
+    const verifyWithRetry = async (retries = 6) => {
+      for (let i = 0; i < retries; i++) {
         try {
-          setIsProcessing(true);
-          setError("");
-          setSuccessMessage("");
-
-          await new Promise((r) => setTimeout(r, 4000));
-
-     
-          const verify = await verifyWithRetry();
-
-          if (!verify?.verified) {
-            setError("Payment is still processing. Please wait or refresh.");
-            setIsProcessing(false);
-            return;
-          }
-
-            // Wait for webhook to process payment
-            let attempts = 0;
-            while (attempts < 10) {
-              const refreshed = await dbService.getUser(uid);
-
-              if (!refreshed?.pendingTransaction) {
-                break; // webhook has processed it
-              }
-
-              await new Promise((r) => setTimeout(r, 2000));
-              attempts++;
-            }
-
-            // refresh UI
-            await refreshUser();
-
-            localStorage.removeItem("paymentReference");
-
-            setSuccessMessage("Payment successful!");
-            setSearchParams({}, { replace: true });
-
-            setTimeout(() => setSuccessMessage(""), 8000);
+          const res = await paymentService.verifyPayment(uid);
+          if (res?.verified) return res;
+          // Still pending — wait and retry
+          await new Promise((r) => setTimeout(r, 2500));
         } catch (err: any) {
-          console.error("FINAL ERROR:", err);
-          setError(err?.message || "Payment failed.");
-        } finally {
-          setIsProcessing(false);
+          const msg = err.message?.toLowerCase() ?? "";
+          // FIX 3: break immediately on definitive failure or server error.
+          // verify.js now returns 503 for auth/network errors, which surfaces
+          // here as a thrown Error — we re-throw it so the outer catch handles it.
+          if (
+            msg.includes("failed") ||
+            msg.includes("cancel") ||
+            msg.includes("503") ||
+            msg.includes("500")
+          ) {
+            throw err;
+          }
+          // Transient error — wait and retry
+          await new Promise((r) => setTimeout(r, 2500));
         }
-      };
+      }
+      return { verified: false };
+    };
 
-      handlePaymentRedirect();
+    const handlePaymentRedirect = async () => {
+      try {
+        setIsProcessing(true);
+        setError("");
+        setSuccessMessage("");
 
-    }, [searchParams, refreshUser, safeEmail, safeName, setSearchParams, uid]);
+        // Small grace period for Monnify to process before first verify call
+        await new Promise((r) => setTimeout(r, 4000));
 
-  const uniqueExamTypes: string[] = useMemo(() => Array.from(new Set(questions.map((q) => q.examType))), [questions]);
+        const verify = await verifyWithRetry();
+
+        if (!verify?.verified) {
+          setError("Payment is still processing. Please wait or refresh.");
+          setIsProcessing(false);
+          return;
+        }
+
+        // Poll until webhook clears pendingTransaction (max 20s)
+        let attempts = 0;
+        while (attempts < 10) {
+          const refreshed = await dbService.getUser(uid);
+          if (!refreshed?.pendingTransaction) break;
+          await new Promise((r) => setTimeout(r, 2000));
+          attempts++;
+        }
+
+        await refreshUser();
+
+        // FIX 4: clear BOTH localStorage keys after successful verification
+        localStorage.removeItem("paymentReference");
+        localStorage.removeItem("monnifyTransactionReference");
+
+        setSuccessMessage("Payment successful!");
+        setSearchParams({}, { replace: true });
+        setTimeout(() => setSuccessMessage(""), 8000);
+      } catch (err: any) {
+        console.error("FINAL ERROR:", err);
+        setError(err?.message || "Payment failed.");
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+
+    handlePaymentRedirect();
+
+  // FIX 2 (continued): use searchString not searchParams; drop safeEmail/safeName
+  }, [searchString, refreshUser, setSearchParams, uid]);
+
+  const uniqueExamTypes: string[] = useMemo(
+    () => Array.from(new Set(questions.map((q) => q.examType))),
+    [questions]
+  );
 
   const subjectsForSelectedExam: string[] = useMemo(() => {
     if (!selectedExamType) return [];
-    return Array.from(new Set(questions.filter((q) => q.examType === selectedExamType).map((q) => q.subject)));
+    return Array.from(
+      new Set(questions.filter((q) => q.examType === selectedExamType).map((q) => q.subject))
+    );
   }, [questions, selectedExamType]);
 
   const avgScore = useMemo(() => {
     if (!results.length) return 0;
-    return Math.round((results.reduce((acc, r) => acc + r.score / r.total, 0) / results.length) * 100);
+    return Math.round(
+      (results.reduce((acc, r) => acc + r.score / r.total, 0) / results.length) * 100
+    );
   }, [results]);
 
   const handleFundWallet = useCallback(async () => {
@@ -285,12 +279,7 @@ const verifyWithRetry = async (retries = 6) => {
     }
 
     const currentUser = auth.currentUser;
-
-    if (!currentUser) {
-      setError("User not logged in.");
-      return;
-    }
-
+    if (!currentUser) { setError("User not logged in."); return; }
     if (!currentUser.email || currentUser.email.trim() === "") {
       setError("User email not available. Please sign in again.");
       return;
@@ -300,11 +289,7 @@ const verifyWithRetry = async (retries = 6) => {
     setError("");
 
     try {
-      await paymentService.fundWallet(
-        currentUser.uid,
-        fundAmount,
-        currentUser.email // FIXED
-      );
+      await paymentService.fundWallet(currentUser.uid, fundAmount, currentUser.email);
     } catch (err) {
       console.error("Fund wallet init failed:", err);
       setError("Monnify gateway unavailable. Check your internet connection.");
@@ -316,62 +301,72 @@ const verifyWithRetry = async (retries = 6) => {
     if (!courseToUnlock) return;
 
     const { examType, subject } = courseToUnlock;
+
+    // FIX 5: fetch a fresh user snapshot before reading walletBalance so we
+    // never make a payment decision based on state that could be 30s stale.
+    // The actual deduction in dbService.purchaseCourse is also guarded by a
+    // Firestore transaction, but this gives the UI accurate feedback upfront.
+    setIsProcessing(true);
+    setError("");
+
+    let freshBalance = user.walletBalance || 0;
+    try {
+      const freshUser = await dbService.getUser(uid);
+      if (freshUser) {
+        freshBalance = freshUser.walletBalance || 0;
+        setUser(freshUser);
+      }
+    } catch {
+      // Non-fatal — fall back to cached balance; server-side guard still protects us
+    }
+
     const price = unlockPrice;
 
-    // Wallet purchase uses course price
-    if ((user.walletBalance || 0) >= price) {
-      setIsProcessing(true);
+    if (freshBalance >= price) {
       try {
         const ref = `WAL-${Date.now()}`;
         await dbService.purchaseCourse(uid, examType, subject, price);
         await dbService.addTransaction(uid, {
-        type: "COURSE_UNLOCK",
-        amount: price,
-        reference: ref,
-        item: `${subject} (${examType})`,
-        status: "SUCCESS",
-      });
+          id: `TX-${ref}`,
+          type: "COURSE_UNLOCK",
+          amount: price,
+          reference: ref,
+          item: `${subject} (${examType})`,
+          status: "SUCCESS",
+          timestamp: Date.now(),
+        });
         await refreshUser();
-        setSuccessMessage(`${subject} unlocked using wallet! Receipt sent.`);
+        setSuccessMessage(`${subject} unlocked using wallet!`);
         setCourseToUnlock(null);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Wallet unlock failed:", err);
-        setError("Unlock failed. Try again.");
+        setError(err?.message || "Unlock failed. Try again.");
       } finally {
         setIsProcessing(false);
       }
     } else {
-      // Direct payment amount uses course price
-      setIsProcessing(true);
       try {
-       const currentUser = auth.currentUser;
-
-      if (!currentUser) {
-        setError("User not logged in.");
-        setIsProcessing(false);
-        return;
-      }
-
-      if (!currentUser.email || currentUser.email.trim() === "") {
-        setError("User email not available. Please sign in again.");
-        setIsProcessing(false);
-        return;
-      }
-      
-      await paymentService.directCoursePurchase(
-        currentUser.uid,
-        currentUser.email, 
-        examType,
-        subject,
-        price
-      );
+        const currentUser = auth.currentUser;
+        if (!currentUser) { setError("User not logged in."); setIsProcessing(false); return; }
+        if (!currentUser.email || currentUser.email.trim() === "") {
+          setError("User email not available. Please sign in again.");
+          setIsProcessing(false);
+          return;
+        }
+        await paymentService.directCoursePurchase(
+          currentUser.uid,
+          currentUser.email,
+          examType,
+          subject,
+          price
+        );
       } catch (err) {
         console.error("Direct purchase init failed:", err);
         setError("Payment initialization failed.");
         setIsProcessing(false);
       }
     }
-  }, [courseToUnlock, refreshUser, safeEmail, safeName, uid, unlockPrice, user.walletBalance]);
+  }, [courseToUnlock, refreshUser, uid, unlockPrice, user.walletBalance]);
 
   return (
     <div className="max-w-[1440px] mx-auto px-4 lg:px-12 py-16 animate-in fade-in duration-500">
@@ -404,10 +399,7 @@ const verifyWithRetry = async (retries = 6) => {
             <div className="flex justify-between items-start mb-8">
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">Fund Your Wallet</h3>
               <button
-                onClick={() => {
-                  setShowFundModal(false);
-                  setError("");
-                }}
+                onClick={() => { setShowFundModal(false); setError(""); }}
                 className="text-slate-300 hover:text-slate-500"
               >
                 <i className="fas fa-times"></i>
@@ -513,9 +505,7 @@ const verifyWithRetry = async (retries = 6) => {
             <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full mr-2"></span>
             Student Portal
           </p>
-
           <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">Welcome, {safeName}</h1>
-
           <p className="text-slate-500 mt-2 text-lg">Achieve excellence with focused mock practice.</p>
         </div>
 
@@ -558,7 +548,6 @@ const verifyWithRetry = async (retries = 6) => {
                 "Select Exam Category"
               )}
             </h2>
-
             {selectedExamType && (
               <button
                 onClick={() => setSelectedExamType(null)}
@@ -666,9 +655,7 @@ const verifyWithRetry = async (retries = 6) => {
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-black text-indigo-600">{Math.round((res.score / res.total) * 100)}%</div>
-                        <div className="text-[9px] font-bold text-slate-300">
-                          {res.score}/{res.total}
-                        </div>
+                        <div className="text-[9px] font-bold text-slate-300">{res.score}/{res.total}</div>
                       </div>
                     </div>
                   ))}
@@ -687,49 +674,48 @@ const verifyWithRetry = async (retries = 6) => {
             </p>
           </div>
         </div>
+
+        {/* Transaction History */}
         <div className="space-y-10">
-        <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-          <i className="fas fa-receipt text-indigo-200"></i>
-          Transaction History
-        </h2>
+          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+            <i className="fas fa-receipt text-indigo-200"></i>
+            Transaction History
+          </h2>
 
-        <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 soft-shadow max-h-[400px] overflow-y-auto">
-          {transactions.length > 0 ? (
-            <div className="space-y-5">
-              {transactions
-                .slice()
-                .sort((a, b) => b.timestamp - a.timestamp)
-                .map((tx) => (
-                  <div key={tx.id} className="flex justify-between items-center">
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        {tx.type === "WALLET_FUND"
-                          ? "Wallet Funding"
-                          : tx.item}
-                      </p>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">
-                        {new Date(tx.timestamp).toLocaleString()}
-                      </p>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-sm font-black text-emerald-600">
-                        ₦{tx.amount.toLocaleString()}
+          <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 soft-shadow max-h-[400px] overflow-y-auto">
+            {transactions.length > 0 ? (
+              <div className="space-y-5">
+                {transactions
+                  .slice()
+                  .sort((a, b) => b.timestamp - a.timestamp)
+                  .map((tx) => (
+                    <div key={tx.id ?? tx.reference} className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-black text-slate-900">
+                          {tx.type === "WALLET_FUND" ? "Wallet Funding" : tx.item ?? "Course Unlock"}
+                        </p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">
+                          {new Date(tx.timestamp).toLocaleString()}
+                        </p>
+                        {/* FIX 6: show status badge so PENDING entries are visible */}
+                        {tx.status !== "SUCCESS" && (
+                          <span className="text-[9px] font-bold text-amber-500 uppercase">{tx.status}</span>
+                        )}
                       </div>
-                      <div className="text-[9px] text-slate-300">
-                        {tx.reference}
+                      <div className="text-right">
+                        <div className={`text-sm font-black ${tx.status === "SUCCESS" ? "text-emerald-600" : "text-amber-500"}`}>
+                          ₦{tx.amount.toLocaleString()}
+                        </div>
+                        <div className="text-[9px] text-slate-300">{tx.reference}</div>
                       </div>
                     </div>
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <p className="text-center text-slate-400 text-sm">
-              No transactions yet
-            </p>
-          )}
+                  ))}
+              </div>
+            ) : (
+              <p className="text-center text-slate-400 text-sm">No transactions yet</p>
+            )}
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );

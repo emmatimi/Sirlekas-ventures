@@ -31,13 +31,13 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "Method Not Allowed" });
     }
 
-    // ✅ SAFE BODY PARSE (handles string or object)
     const body =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
     const { userId, examType, subject, email, amount } = body || {};
 
-    if (!userId || !email || !amount) {
+    // FIX 1: use == null instead of ! so numeric userId values like 0 are accepted
+    if (userId == null || userId === "" || !email || !amount) {
       return res.status(400).json({
         error: "Missing required fields (userId, email, amount)",
       });
@@ -67,18 +67,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // ✅ GENERATE UNIQUE REFERENCE
     const localReference = `SIRL-${
       examType === "WALLET_FUND" ? "WALLET" : "COURSE"
     }-${Date.now()}-${String(userId).slice(0, 6)}`;
 
-    // ✅ GET TOKEN
-    const token = await getMonnifyToken(
-      MONNIFY_API_KEY,
-      MONNIFY_SECRET_KEY
-    );
+    const token = await getMonnifyToken(MONNIFY_API_KEY, MONNIFY_SECRET_KEY);
 
-    // ✅ ADD TYPE (CRITICAL FOR WEBHOOK)
     const transactionType =
       examType === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_UNLOCK";
 
@@ -86,28 +80,24 @@ export default async function handler(req, res) {
       amount: numericAmount,
       currencyCode: "NGN",
       contractCode: MONNIFY_CONTRACT_CODE,
-
       paymentReference: localReference,
-
       paymentDescription:
         transactionType === "WALLET_FUND"
           ? "Wallet Funding - Sirlekas"
           : `Unlock ${subject || "Course"}`,
-
       customerName: email.split("@")[0],
       customerEmail: email,
-
       paymentMethods: ["CARD", "ACCOUNT_TRANSFER"],
-
       redirectUrl: `${APP_URL}/dashboard`,
-
-      // 🔥 VERY IMPORTANT (WEBHOOK DEPENDS ON THIS)
+      // FIX 2: include email in metaData so the webhook can use it if the
+      // customer object is missing from the Monnify callback payload
       metaData: {
         userId,
         examType,
         subject,
         amount: numericAmount,
         type: transactionType,
+        email,
       },
     };
 
