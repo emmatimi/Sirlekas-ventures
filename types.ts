@@ -45,6 +45,8 @@ export interface Transaction {
   id?: string;
   reference: string;
   userId: string;
+  userName?: string;
+  userEmail?: string;
   category?: string; // "WALLET_FUND" or "COURSE_PURCHASE"
   type?: 'WALLET_FUND' | 'COURSE_UNLOCK';
   item?: string;

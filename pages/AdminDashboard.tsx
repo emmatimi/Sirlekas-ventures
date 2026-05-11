@@ -121,6 +121,15 @@ const walletStats = useMemo(() => {
   };
 }, [transactions, users]);
 
+const topWalletUsers = useMemo(
+  () =>
+    users
+      .slice()
+      .sort((a, b) => Number(b.walletBalance || 0) - Number(a.walletBalance || 0))
+      .slice(0, 5),
+  [users]
+);
+
 
   const groupedQuestions = useMemo(() => {
     const groups: Record<string, { examType: string; subject: string; questions: Question[] }> = {};
@@ -547,7 +556,14 @@ const walletStats = useMemo(() => {
                   <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Revenue Ledger</p>
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight">Transaction History</h2>
                 </div>
-                <div className="text-sm font-bold text-slate-400">{walletStats.successfulCount} successful transactions</div>
+                <div className="flex items-center gap-3">
+                  <span className="px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-widest">
+                    {walletStats.successfulCount} successful
+                  </span>
+                  <span className="px-3 py-1.5 rounded-full bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                    {transactions.length} total
+                  </span>
+                </div>
               </div>
 
               <div className="divide-y divide-slate-100 max-h-[620px] overflow-y-auto custom-scrollbar">
@@ -569,7 +585,10 @@ const walletStats = useMemo(() => {
                             <p className="font-black text-slate-900 truncate">
                               {isWallet ? 'Wallet Funding' : tx.item || 'Course Unlock'}
                             </p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                            <p className="text-xs font-bold text-slate-500 mt-1 truncate">
+                              {tx.userName || tx.userEmail || 'Unknown student'}
+                            </p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 break-all">
                               {new Date(tx.completedAt || tx.timestamp || Date.now()).toLocaleString()} · {tx.reference}
                             </p>
                           </div>
@@ -596,11 +615,32 @@ const walletStats = useMemo(() => {
                 <p className="text-4xl font-black text-slate-900">₦{walletStats.totalWalletBalance.toLocaleString()}</p>
                 <p className="text-xs text-slate-500 mt-4 leading-relaxed">Total unused wallet balance currently held across student accounts.</p>
               </div>
-              <div className="bg-blue-50 rounded-[2.5rem] p-8 border border-blue-100">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-4">Quick Notes</p>
-                <p className="text-sm text-blue-900 leading-relaxed font-medium">
-                  Successful Monnify callbacks and verified returns are recorded here. Pending rows indicate students who started checkout but have not completed payment.
-                </p>
+              <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 soft-shadow">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-1">Wallet Holders</p>
+                    <h3 className="text-lg font-black text-slate-900">Top Balances</h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <i className="fas fa-users"></i>
+                  </div>
+                </div>
+
+                {topWalletUsers.length > 0 ? (
+                  <div className="space-y-4">
+                    {topWalletUsers.map((student) => (
+                      <div key={student.uid} className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-900 truncate">{student.name || student.email}</p>
+                          <p className="text-[10px] font-bold text-slate-400 truncate">{student.email}</p>
+                        </div>
+                        <p className="font-black text-slate-900">₦{Number(student.walletBalance || 0).toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm font-bold text-slate-400">No student wallet balances found.</p>
+                )}
               </div>
             </aside>
           </div>

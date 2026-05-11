@@ -36,6 +36,15 @@ const FALLBACK_QUOTES: InspirationalQuote[] = [
 const makeCourseKey = (examType: string, subject: string) => `${examType}_${subject}`;
 
 const isFirebaseReady = () => !!db && !!import.meta.env.VITE_FIREBASE_API_KEY;
+
+const toMillis = (value: any): number => {
+  if (!value) return Date.now();
+  if (typeof value === 'number') return value;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Date.now();
+};
  
 export const dbService = {
   syncUser: async (firebaseUser: any, role: string = 'student'): Promise<User> => {
@@ -104,12 +113,45 @@ export const dbService = {
   getAllTransactions: async (): Promise<Transaction[]> => {
     if (!isFirebaseReady()) return [];
     try {
-      const users = await dbService.getUsers();
-      return users.flatMap((user) =>
-        (Array.isArray(user.transactions) ? user.transactions : []).map((tx) => ({
+      const [users, txSnap] = await Promise.all([
+        dbService.getUsers(),
+        getDocs(collection(db, 'transactions')).catch(() => null),
+      ]);
+
+      const userById = new Map(users.map((user) => [user.uid, user]));
+      const byReference = new Map<string, Transaction>();
+
+      const addTx = (tx: any, fallbackUser?: User) => {
+        const reference = tx.reference || tx.id;
+        if (!reference) return;
+        const user = userById.get(tx.userId) || fallbackUser;
+        const normalized: Transaction = {
           ...tx,
-          userId: tx.userId || user.uid,
-        }))
+          id: tx.id || `TX-${reference}`,
+          reference,
+          userId: tx.userId || fallbackUser?.uid || '',
+          userName: tx.userName || user?.name || '',
+          userEmail: tx.userEmail || tx.email || user?.email || '',
+          amount: Number(tx.amount || 0),
+          status: tx.status || 'PENDING',
+          timestamp: toMillis(tx.timestamp),
+          completedAt: tx.completedAt ? toMillis(tx.completedAt) : undefined,
+        };
+
+        const existing = byReference.get(reference);
+        if (!existing || existing.status !== 'SUCCESS') {
+          byReference.set(reference, normalized);
+        }
+      };
+
+      txSnap?.docs.forEach((docSnap) => addTx({ id: docSnap.id, ...docSnap.data() }));
+
+      users.forEach((user) =>
+        (Array.isArray(user.transactions) ? user.transactions : []).forEach((tx) => addTx(tx, user))
+      );
+
+      return Array.from(byReference.values()).sort(
+        (a, b) => (b.completedAt || b.timestamp || 0) - (a.completedAt || a.timestamp || 0)
       );
     } catch (err) {
       console.error('getAllTransactions failed', err);
