@@ -54,7 +54,15 @@ async function verifyAdminUser(req) {
   const email = decoded.email?.trim().toLowerCase();
   const adminEmails = getAdminEmails();
 
-  if (!email || !adminEmails.includes(email)) {
+  if (email && adminEmails.includes(email)) {
+    return decoded;
+  }
+
+  const app = initializeAdmin();
+  const userSnap = await app.firestore().collection("users").doc(decoded.uid).get();
+  const userRole = userSnap.exists ? userSnap.data()?.role : null;
+
+  if (userRole !== "admin") {
     const err = new Error("Admin access required");
     err.statusCode = 403;
     throw err;
