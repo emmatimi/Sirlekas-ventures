@@ -10,6 +10,7 @@ import { auth, googleProvider } from '../services/firebase';
 import { dbService } from '../services/dbService';
 import { getRoleForEmail } from '../services/roles';
 import { User } from '../types';
+import BrandLogo from '../components/BrandLogo';
 
 interface AuthPageProps {
   onLogin: (user: User) => void;
@@ -172,10 +173,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     <div className="min-h-[90vh] flex items-center justify-center px-4 py-20 relative bg-slate-50">
       <div className="max-w-md w-full bg-white p-12 md:p-14 rounded-[3.5rem] soft-shadow border border-slate-100 relative z-10 animate-in zoom-in-95 duration-500">
         <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-[#0047AB] rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-blue-100 border-2 border-white overflow-hidden relative">
-            <i className="fas fa-square rotate-45 text-[#FFD700] absolute text-3xl"></i>
-            <span className="relative z-10 text-white font-black text-xl">S</span>
-          </div>
+          <BrandLogo size="lg" showText={false} className="justify-center mb-8" />
           <h2 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">
             {isRegister ? 'Join Excellence' : 'Access Portal'}
           </h2>

@@ -12,6 +12,7 @@ import CGPACalculator from './pages/CGPACalculator.tsx';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './services/firebase.ts';
 import { getRoleForEmail } from './services/roles.ts';
+import BrandLogo from './components/BrandLogo.tsx';
 
 const INACTIVITY_LOGOUT_MS = 48 * 60 * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'sirlekas_last_activity_at';
@@ -272,14 +273,7 @@ const App: React.FC = () => {
         <nav className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12">
           <div className="flex justify-between h-20 items-center">
             <Link to="/" className="flex items-center space-x-3 group z-[110]">
-              <div className="w-10 h-10 bg-[#0047AB] rounded-xl flex items-center justify-center shadow-lg shadow-blue-200 border-2 border-white overflow-hidden relative">
-                <i className="fas fa-square rotate-45 text-[#FFD700] absolute text-xl"></i>
-                <span className="relative z-10 text-white font-black text-xs">S</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xl font-extrabold tracking-tighter text-slate-900 leading-none">SIRLEKAS</span>
-                <span className="text-[10px] font-black tracking-[0.3em] text-[#0047AB] uppercase">VENTURES</span>
-              </div>
+              <BrandLogo size="md" />
             </Link>
 
             <div className="hidden md:flex items-center space-x-8">
@@ -340,13 +334,7 @@ const App: React.FC = () => {
         >
           <div className="flex justify-between items-center px-8 py-8 border-b border-slate-50 flex-shrink-0">
             <Link to="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-[#0047AB] rounded-2xl flex items-center justify-center border-2 border-white shadow-lg">
-                <span className="text-white font-black text-xl">S</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xl font-black text-slate-900 tracking-tighter leading-none">SIRLEKAS</span>
-                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">Ventures Hub</span>
-              </div>
+              <BrandLogo size="md" />
             </Link>
             
             <button 
@@ -474,10 +462,7 @@ const App: React.FC = () => {
         <div className="max-w-[1440px] mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-16 items-start lg:px-12">
           <div>
             <Link to="/" className="flex items-center space-x-3 mb-6">
-              <div className="w-8 h-8 bg-[#0047AB] rounded-lg flex items-center justify-center border border-white">
-                <span className="text-white text-[10px] font-black">S</span>
-              </div>
-              <span className="text-xl font-bold text-slate-900 tracking-tighter uppercase">SIRLEKAS VENTURES</span>
+              <BrandLogo size="sm" />
             </Link>
             <p className="text-slate-500 text-base leading-relaxed max-w-xs">
               Empowering scholars at Ekiti State University with world-class digital tools and professional cyber services since 2023.
