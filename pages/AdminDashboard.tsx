@@ -20,6 +20,7 @@ const AdminDashboard: React.FC = () => {
     pendingValue: number;
     totalWalletBalance: number;
     successfulCount: number;
+    coursePurchaseCount?: number;
   } | null>(null);
   const [walletLoadError, setWalletLoadError] = useState('');
   const [editingQuestion, setEditingQuestion] = useState<Partial<Question> | null>(null);
@@ -163,12 +164,13 @@ const walletStats = useMemo(() => {
   const totalWalletBalance = users.reduce((sum, user) => sum + Number(user.walletBalance || 0), 0);
 
   return {
-    totalIncome: courseIncome + walletFunding,
+    totalIncome: courseIncome,
     courseIncome,
     walletFunding,
     pendingValue,
     totalWalletBalance,
     successfulCount: successful.length,
+    coursePurchaseCount: successful.filter((tx) => tx.type === 'COURSE_UNLOCK' || tx.category === 'COURSE_PURCHASE').length,
   };
 }, [transactions, users, walletStatsOverride]);
 
@@ -590,19 +592,19 @@ const topWalletUsers = useMemo(
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {[
-              { label: 'Total Income', value: walletStats.totalIncome, icon: 'fa-chart-line', tone: 'bg-slate-900 text-white' },
-              { label: 'Course Sales', value: walletStats.courseIncome, icon: 'fa-graduation-cap', tone: 'bg-blue-600 text-white' },
-              { label: 'Wallet Funding', value: walletStats.walletFunding, icon: 'fa-wallet', tone: 'bg-emerald-600 text-white' },
-              { label: 'Pending Value', value: walletStats.pendingValue, icon: 'fa-clock', tone: 'bg-amber-500 text-white' },
+              { label: 'Total Income', value: `₦${walletStats.totalIncome.toLocaleString()}`, icon: 'fa-chart-line', tone: 'bg-slate-900 text-white', caption: 'Completed course purchases only' },
+              { label: 'Courses Purchased', value: (walletStats.coursePurchaseCount || 0).toLocaleString(), icon: 'fa-graduation-cap', tone: 'bg-blue-600 text-white', caption: 'Successful course unlocks' },
+              { label: 'Wallet Funding', value: `₦${walletStats.walletFunding.toLocaleString()}`, icon: 'fa-wallet', tone: 'bg-emerald-600 text-white', caption: 'Wallet top-ups, not income' },
             ].map((stat) => (
               <div key={stat.label} className={`${stat.tone} rounded-[2rem] p-7 shadow-xl relative overflow-hidden`}>
                 <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-10 -mt-10"></div>
                 <div className="relative z-10 flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-2">{stat.label}</p>
-                    <p className="text-3xl font-black tracking-tight">₦{stat.value.toLocaleString()}</p>
+                    <p className="text-3xl font-black tracking-tight">{stat.value}</p>
+                    <p className="text-[11px] font-bold opacity-60 mt-3">{stat.caption}</p>
                   </div>
                   <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center">
                     <i className={`fas ${stat.icon}`}></i>

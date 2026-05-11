@@ -116,12 +116,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       stats: {
-        totalIncome: courseIncome + walletFunding,
+        totalIncome: courseIncome,
         courseIncome,
         walletFunding,
         pendingValue,
         totalWalletBalance,
         successfulCount: successful.length,
+        coursePurchaseCount: successful.filter((tx) => tx.type === "COURSE_UNLOCK" || tx.category === "COURSE_PURCHASE").length,
         transactionCount: transactions.length,
       },
       transactions,
