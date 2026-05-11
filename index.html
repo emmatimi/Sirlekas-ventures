@@ -14,9 +14,6 @@
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://sirlekasventures.com/" />
 
-    <!-- Google Identity Services -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sirlekasventures.com/">
@@ -88,51 +85,7 @@
     }
     </script>
 
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
-        
-        html { scroll-behavior: smooth; }
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: #ffffff;
-            color: #0f172a;
-        }
-        .glass-navbar {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        }
-        .gradient-text {
-            background: linear-gradient(135deg, #0047AB 0%, #002D62 100%);
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .reveal {
-            opacity: 1;
-            transform: translateY(0);
-            transition: opacity 0.8s ease-out, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        body.js-ready .reveal { opacity: 0; transform: translateY(20px); }
-        body.js-ready .reveal.active { opacity: 1; transform: translateY(0); }
-    </style>
-    <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@19.0.0",
-    "react-dom": "https://esm.sh/react-dom@19.0.0",
-    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-    "react-router-dom": "https://esm.sh/react-router-dom@6.26.2?deps=react@19.0.0,react-dom@19.0.0",
-    "jwt-decode": "https://esm.sh/jwt-decode@4.0.0",
-    "firebase/": "https://esm.sh/firebase@^12.9.0/",
-    "@emailjs/browser": "https://esm.sh/@emailjs/browser@4.1.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/"
-  }
-}
-</script>
 </head>
 <body class="selection:bg-blue-100 selection:text-blue-900">
     <div id="root"></div>

@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebase';
 import { dbService } from '../services/dbService';
-import { emailService } from '../services/emailService';
+import { getRoleForEmail } from '../services/roles';
 import { User } from '../types';
 
 interface AuthPageProps {
@@ -76,7 +76,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
         new Promise((_, reject) => setTimeout(() => reject(new Error('auth/popup-timeout')), 15000))
       ]);
 
-      const role = result.user.email === 'admin@cafe.com' ? 'admin' : 'student';
+      const role = getRoleForEmail(result.user.email);
       const user = await dbService.syncUser(result.user, role);
       onLogin(user);
       removeFocusListener();
@@ -119,7 +119,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
         result = await signInWithEmailAndPassword(auth, email, password);
       }
       
-      const role = email.toLowerCase() === 'admin@cafe.com' ? 'admin' : 'student';
+      const role = getRoleForEmail(result.user.email);
       const user = await dbService.syncUser(result.user, role);
       onLogin(user);
     } catch (err: any) {

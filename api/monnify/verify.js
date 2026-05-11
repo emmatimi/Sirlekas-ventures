@@ -1,6 +1,12 @@
 import axios from "axios";
+import { createRequire } from "module";
 
 const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
+const require = createRequire(import.meta.url);
+const {
+  verifyFirebaseUser,
+  finalizePaidTransaction,
+} = require("./_payment-admin.cjs");
 
 async function getMonnifyToken(apiKey, secretKey) {
   const basic = Buffer.from(`${apiKey}:${secretKey}`).toString("base64");
@@ -25,12 +31,19 @@ export default async function handler(req, res) {
     const body =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    console.log("BODY:", body);
-
     const {
+      userId,
       paymentReference,
       monnifyTransactionReference,
     } = body || {};
+
+    const decodedUser = await verifyFirebaseUser(req);
+
+    if (!userId || decodedUser.uid !== userId) {
+      return res.status(403).json({
+        error: "Cannot verify payment for another user",
+      });
+    }
 
     if (!paymentReference && !monnifyTransactionReference) {
       return res.status(400).json({
@@ -60,8 +73,7 @@ export default async function handler(req, res) {
       ? { transactionReference: monnifyTransactionReference }
       : { paymentReference };
 
-    console.log("VERIFY PARAMS:", params);
-
+    let responseData;
     try {
       const response = await axios.get(
         `${MONNIFY_BASE_URL}/transactions/query`,
@@ -72,14 +84,13 @@ export default async function handler(req, res) {
           },
         }
       );
-
-      console.log("VERIFY SUCCESS:", response.data);
+      responseData = response.data;
 
       // FIX 2: Monnify returns HTTP 200 with requestSuccessful=false and
       // responseCode "99" when the reference doesn't exist — this happens when
       // the user closes the checkout page without paying. It is NOT a pending
       // payment. Return CANCELLED so the dashboard stops retrying immediately.
-      const topLevel = response.data || {};
+      const topLevel = responseData || {};
       const details  = topLevel.details || {};
       const isNotFound =
         topLevel.requestSuccessful === false ||
@@ -96,8 +107,6 @@ export default async function handler(req, res) {
       }
 
       // Return Monnify's actual response — dashboard reads responseBody.paymentStatus
-      return res.status(200).json(response.data);
-
     } catch (monnifyErr) {
       const monnifyData = monnifyErr?.response?.data;
       const httpStatus = monnifyErr?.response?.status;
@@ -122,10 +131,23 @@ export default async function handler(req, res) {
       });
     }
 
+    const payment = responseData?.responseBody;
+
+    if (payment?.paymentStatus === "PAID") {
+      await finalizePaidTransaction(payment, {
+        userId,
+        paymentReference,
+        monnifyTransactionReference,
+        paymentStatus: "PAID",
+      });
+    }
+
+    return res.status(200).json(responseData);
+
   } catch (err) {
     // Outermost catch: unexpected errors (JSON parse, etc.)
     console.error("VERIFY UNEXPECTED ERROR:", err.message);
-    return res.status(500).json({
+    return res.status(err.statusCode || 500).json({
       status: "ERROR",
       error: err.message || "Internal server error",
     });

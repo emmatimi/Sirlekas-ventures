@@ -8,10 +8,11 @@ export interface User {
   role: UserRole;
   avatar?: string;
   subscriptions?: string[]; 
-  purchasedCourses?: string[]; // format: "examType-subject"
+  purchasedCourses?: string[]; // format: "examType_subject"
   walletBalance: number;
   createdAt: number;
   pendingTransaction?: PendingTransaction;
+  transactions?: Transaction[];
 }
 
 export interface Question {
@@ -41,12 +42,16 @@ export interface InspirationalQuote {
 }
 
 export interface Transaction {
+  id?: string;
   reference: string;
   userId: string;
-  category: string; // "WALLET_FUND" or "COURSE_PURCHASE"
+  category?: string; // "WALLET_FUND" or "COURSE_PURCHASE"
+  type?: 'WALLET_FUND' | 'COURSE_UNLOCK';
+  item?: string;
   amount: number;
   status: 'PENDING' | 'SUCCESS' | 'FAILED';
   timestamp: number;
+  completedAt?: number;
 }
 
 export type PendingTransaction = {

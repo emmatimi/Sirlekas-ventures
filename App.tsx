@@ -11,6 +11,7 @@ import AdminDashboard from './pages/AdminDashboard.tsx';
 import CGPACalculator from './pages/CGPACalculator.tsx';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './services/firebase.ts';
+import { getRoleForEmail } from './services/roles.ts';
 
 const ScrollToTop = () => {
   const { pathname, hash } = useLocation();
@@ -137,7 +138,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const role = firebaseUser.email === 'admin@cafe.com' ? 'admin' : 'student';
+        const role = getRoleForEmail(firebaseUser.email);
         const syncedUser = await dbService.syncUser(firebaseUser, role);
         setUser(syncedUser);
       } else {

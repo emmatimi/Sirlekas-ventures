@@ -7,9 +7,12 @@ import emailjs from '@emailjs/browser';
  */
 
 const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-const EMAILJS_RECEIPT_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+const EMAILJS_RECEIPT_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_RECEIPT_TEMPLATE_ID;
 const EMAILJS_RESET_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_RESET_TEMPLATE_ID;
 const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+
+const isEmailJsConfigured = () =>
+  Boolean(EMAILJS_SERVICE_ID && EMAILJS_PUBLIC_KEY);
 
 
 export const emailService = {
@@ -25,7 +28,7 @@ export const emailService = {
     item_name?: string;
   }) => {
     try {
-      if (EMAILJS_PUBLIC_KEY === "user_placeholder_key") return;
+      if (!isEmailJsConfigured() || !EMAILJS_RECEIPT_TEMPLATE_ID) return;
 
       const templateParams = {
         to_name: params.to_name,
@@ -61,7 +64,7 @@ export const emailService = {
     reset_link: string;
   }) => {
     try {
-      if (EMAILJS_PUBLIC_KEY === "user_placeholder_key") return;
+      if (!isEmailJsConfigured() || !EMAILJS_RESET_TEMPLATE_ID) return;
 
       const templateParams = {
         user_name: params.user_name,

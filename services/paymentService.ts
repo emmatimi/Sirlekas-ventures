@@ -1,5 +1,4 @@
-import { db } from "./firebase";
-import { doc, setDoc, getDoc, updateDoc, arrayUnion, deleteField } from "firebase/firestore";
+import { auth } from "./firebase";
 
 const INIT_ENDPOINT = "/api/monnify/init";
 const VERIFY_ENDPOINT = "/api/monnify/verify";
@@ -14,7 +13,7 @@ export const paymentService = {
   fundWallet: async (userId: string, amount: number, email: string) => {
     const resp = await fetch(INIT_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await paymentService.getAuthHeaders(),
       body: JSON.stringify({
         userId,
         examType: "WALLET_FUND",
@@ -42,35 +41,6 @@ export const paymentService = {
       localStorage.setItem("monnifyTransactionReference", monnifyTransactionReference);
     }
 
-    const userRef = doc(db, "users", userId);
-
-    // FIX 1: write pendingTransaction with updateDoc (no merge on this field) so any
-    // stale reference from a previous failed payment is always overwritten, not left
-    // alongside the new one. Use arrayUnion only for the transactions log.
-    await updateDoc(userRef, {
-      pendingTransaction: {
-        reference: paymentReference,
-        monnifyTransactionReference: monnifyTransactionReference ?? null,
-        amount,
-        type: "WALLET_FUND",
-        timestamp: Date.now(),
-      },
-    });
-
-    // FIX 2: add a proper id field so the dashboard's React key is never undefined
-    await updateDoc(userRef, {
-      transactions: arrayUnion({
-        id: `TX-${paymentReference}`,
-        reference: paymentReference,
-        userId,
-        category: "WALLET_FUND",
-        type: "WALLET_FUND",
-        amount,
-        status: "PENDING",
-        timestamp: Date.now(),
-      }),
-    });
-
     window.location.href = checkoutUrl;
   },
 
@@ -88,7 +58,7 @@ export const paymentService = {
 
     const resp = await fetch(INIT_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await paymentService.getAuthHeaders(),
       body: JSON.stringify({
         userId,
         examType,
@@ -115,40 +85,10 @@ export const paymentService = {
       localStorage.setItem("monnifyTransactionReference", monnifyTransactionReference);
     }
 
-    const userRef = doc(db, "users", userId);
-
-    // FIX 1 (same as fundWallet): overwrite pendingTransaction unconditionally
-    await updateDoc(userRef, {
-      pendingTransaction: {
-        reference: paymentReference,
-        monnifyTransactionReference: monnifyTransactionReference ?? null,
-        amount: numericAmount,
-        examType,
-        subject,
-        type: "COURSE_UNLOCK",
-        timestamp: Date.now(),
-      },
-    });
-
-    // FIX 2: include id field on the embedded transaction record
-    await updateDoc(userRef, {
-      transactions: arrayUnion({
-        id: `TX-${paymentReference}`,
-        reference: paymentReference,
-        userId,
-        category: "COURSE_PURCHASE",
-        type: "COURSE_UNLOCK",
-        item: `${subject} (${examType})`,
-        amount: numericAmount,
-        status: "PENDING",
-        timestamp: Date.now(),
-      }),
-    });
-
     window.location.href = checkoutUrl;
   },
 
-  verifyPayment: async (_userId: string) => {
+  verifyPayment: async (userId: string) => {
     const paymentReference = localStorage.getItem("paymentReference");
     const monnifyTransactionReference = localStorage.getItem("monnifyTransactionReference");
 
@@ -158,8 +98,9 @@ export const paymentService = {
 
     const resp = await fetch(VERIFY_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await paymentService.getAuthHeaders(),
       body: JSON.stringify({
+        userId,
         paymentReference,
         monnifyTransactionReference,
       }),
@@ -189,5 +130,15 @@ export const paymentService = {
 
     // PENDING or anything else → return unverified so caller retries
     return { verified: false };
+  },
+
+  getAuthHeaders: async () => {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error("User not logged in.");
+
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    };
   },
 };

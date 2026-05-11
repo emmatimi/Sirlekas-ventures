@@ -1,4 +1,12 @@
+import { createRequire } from "module";
+
 const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
+const require = createRequire(import.meta.url);
+const {
+  initializeAdmin,
+  verifyFirebaseUser,
+  getCoursePrice,
+} = require("./_payment-admin.cjs");
 
 /**
  * Get Monnify access token
@@ -36,16 +44,32 @@ export default async function handler(req, res) {
 
     const { userId, examType, subject, email, amount } = body || {};
 
-    // FIX 1: use == null instead of ! so numeric userId values like 0 are accepted
-    if (userId == null || userId === "" || !email || !amount) {
-      return res.status(400).json({
-        error: "Missing required fields (userId, email, amount)",
+    const decodedUser = await verifyFirebaseUser(req);
+
+    if (!userId || decodedUser.uid !== userId) {
+      return res.status(403).json({
+        error: "Cannot initialize payment for another user",
       });
     }
 
-    const numericAmount = Number(amount);
+    if (!email || decodedUser.email !== email) {
+      return res.status(400).json({
+        error: "Payment email must match the signed-in account",
+      });
+    }
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    const transactionType =
+      examType === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_UNLOCK";
+
+    if (transactionType === "COURSE_UNLOCK" && (!examType || !subject)) {
+      return res.status(400).json({
+        error: "Missing required fields (examType, subject)",
+      });
+    }
+
+    const requestedAmount = Number(amount);
+
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
       return res.status(400).json({ error: "Invalid amount" });
     }
 
@@ -67,14 +91,18 @@ export default async function handler(req, res) {
       });
     }
 
+    const admin = initializeAdmin();
+    const db = admin.firestore();
+    const numericAmount =
+      transactionType === "COURSE_UNLOCK"
+        ? await getCoursePrice(db, examType, subject)
+        : requestedAmount;
+
     const localReference = `SIRL-${
-      examType === "WALLET_FUND" ? "WALLET" : "COURSE"
+      transactionType === "WALLET_FUND" ? "WALLET" : "COURSE"
     }-${Date.now()}-${String(userId).slice(0, 6)}`;
 
     const token = await getMonnifyToken(MONNIFY_API_KEY, MONNIFY_SECRET_KEY);
-
-    const transactionType =
-      examType === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_UNLOCK";
 
     const paymentPayload = {
       amount: numericAmount,
@@ -88,20 +116,16 @@ export default async function handler(req, res) {
       customerName: email.split("@")[0],
       customerEmail: email,
       paymentMethods: ["CARD", "ACCOUNT_TRANSFER"],
-      redirectUrl: `${APP_URL}/dashboard`,
-      // FIX 2: include email in metaData so the webhook can use it if the
-      // customer object is missing from the Monnify callback payload
+      redirectUrl: `${APP_URL || req.headers.origin || ""}/dashboard?paymentReference=${encodeURIComponent(localReference)}`,
       metaData: {
         userId,
-        examType,
-        subject,
+        examType: transactionType === "WALLET_FUND" ? null : examType,
+        subject: transactionType === "WALLET_FUND" ? null : subject,
         amount: numericAmount,
         type: transactionType,
         email,
       },
     };
-
-    console.log("INIT PAYLOAD:", paymentPayload);
 
     const initResp = await fetch(
       `${MONNIFY_BASE_URL}/merchant/transactions/init-transaction`,
@@ -117,8 +141,6 @@ export default async function handler(req, res) {
 
     const initData = await initResp.json();
 
-    console.log("INIT RESPONSE:", initData);
-
     const checkoutUrl = initData?.responseBody?.checkoutUrl;
     const paymentReference = initData?.responseBody?.paymentReference;
     const monnifyTransactionReference =
@@ -131,6 +153,41 @@ export default async function handler(req, res) {
       });
     }
 
+    const userRef = db.collection("users").doc(userId);
+    const pendingTransaction = {
+      reference: paymentReference,
+      monnifyTransactionReference,
+      amount: numericAmount,
+      type: transactionType,
+      examType: transactionType === "COURSE_UNLOCK" ? examType : null,
+      subject: transactionType === "COURSE_UNLOCK" ? subject : null,
+      timestamp: Date.now(),
+    };
+
+    await userRef.set(
+      {
+        pendingTransaction,
+        transactions: admin.firestore.FieldValue.arrayUnion({
+          id: `TX-${paymentReference}`,
+          reference: paymentReference,
+          userId,
+          category:
+            transactionType === "WALLET_FUND"
+              ? "WALLET_FUND"
+              : "COURSE_PURCHASE",
+          type: transactionType,
+          item:
+            transactionType === "WALLET_FUND"
+              ? "Wallet Funding"
+              : `${subject} (${examType})`,
+          amount: numericAmount,
+          status: "PENDING",
+          timestamp: Date.now(),
+        }),
+      },
+      { merge: true }
+    );
+
     return res.status(200).json({
       checkoutUrl,
       paymentReference,
@@ -140,7 +197,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("INIT ERROR:", error);
 
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: error.message || "Failed to initialize payment",
     });
   }

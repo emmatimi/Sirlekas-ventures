@@ -1,21 +1,24 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Question, ExamResult, InspirationalQuote } from '../types';
+import { Question, ExamResult, InspirationalQuote, Transaction, User } from '../types';
 import { dbService } from '../services/dbService';
 
 const EXAM_CATEGORIES = ['JAMB', 'General Studies (GST)'];
 
 const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'questions' | 'results' | 'courses' | 'quotes'>('courses');
+  const [activeTab, setActiveTab] = useState<'wallet' | 'questions' | 'results' | 'courses' | 'quotes'>('courses');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [results, setResults] = useState<ExamResult[]>([]);
   const [quotes, setQuotes] = useState<InspirationalQuote[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [editingQuestion, setEditingQuestion] = useState<Partial<Question> | null>(null);
   const [editingQuote, setEditingQuote] = useState<Partial<InspirationalQuote> | null>(null);
   const [questionSearch, setQuestionSearch] = useState('');
   const [coursePrices, setCoursePrices] = useState<Record<string, number>>({});
   const [priceDraft, setPriceDraft] = useState<Record<string, number>>({});
-  const [priceMessage, setPriceMessage] = useState('');
+  const [priceMessage, setPriceMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [priceToConfirm, setPriceToConfirm] = useState<{ examType: string; subject: string; oldPrice: number; newPrice: number } | null>(null);
 
 
   // Bulk Upload State
@@ -37,11 +40,13 @@ const getCoursePrice = (examType: string, subject: string) =>
   priceDraft[getPriceKey(examType, subject)] ?? coursePrices[getPriceKey(examType, subject)] ?? 300;
 
 const refreshData = useCallback(async () => {
-  const [allQs, allResults, allQuotes, prices] = await Promise.all([
+  const [allQs, allResults, allQuotes, prices, allUsers, allTransactions] = await Promise.all([
     dbService.getQuestions(),
     dbService.getResults(),
     dbService.getQuotes(),
     dbService.getCoursePrices(),
+    dbService.getUsers(),
+    dbService.getAllTransactions(),
   ]);
 
   setQuestions(allQs);
@@ -49,6 +54,8 @@ const refreshData = useCallback(async () => {
   setQuotes(allQuotes);
   setCoursePrices(prices || {});
   setPriceDraft(prices || {});
+  setUsers(allUsers);
+  setTransactions(allTransactions);
 }, []);
 
 useEffect(() => {
@@ -57,20 +64,60 @@ useEffect(() => {
 
 
 
-const saveCoursePrice = async (examType: string, subject: string) => {
+const requestCoursePriceSave = (examType: string, subject: string) => {
   const price = Number(getCoursePrice(examType, subject));
+  if (!Number.isFinite(price) || price <= 0) {
+    setPriceMessage({ type: 'error', text: 'Enter a valid course price greater than zero.' });
+    return;
+  }
+
+  setPriceToConfirm({
+    examType,
+    subject,
+    oldPrice: Number(coursePrices[getPriceKey(examType, subject)] ?? 300),
+    newPrice: price,
+  });
+};
+
+const saveCoursePrice = async () => {
+  if (!priceToConfirm) return;
+  const { examType, subject, newPrice } = priceToConfirm;
   try {
-    await dbService.setCoursePrice(examType, subject, price);
-    setPriceMessage(`Saved price for ${subject}: ₦${price}`);
+    await dbService.setCoursePrice(examType, subject, newPrice);
+    setPriceMessage({ type: 'success', text: `${subject} price updated to ₦${newPrice.toLocaleString()}.` });
+    setPriceToConfirm(null);
     await refreshData();
   } catch (err: any) {
     console.error('setCoursePrice failed', err);
     const msg = err?.message || 'Failed to save price.';
-    setPriceMessage(`Error saving price: ${msg}`);
+    setPriceMessage({ type: 'error', text: msg });
   } finally {
-    setTimeout(() => setPriceMessage(''), 4000);
+    setTimeout(() => setPriceMessage(null), 5000);
   }
 };
+
+const walletStats = useMemo(() => {
+  const successful = transactions.filter((tx) => tx.status === 'SUCCESS');
+  const courseIncome = successful
+    .filter((tx) => tx.type === 'COURSE_UNLOCK' || tx.category === 'COURSE_PURCHASE')
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  const walletFunding = successful
+    .filter((tx) => tx.type === 'WALLET_FUND' || tx.category === 'WALLET_FUND')
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  const pendingValue = transactions
+    .filter((tx) => tx.status === 'PENDING')
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  const totalWalletBalance = users.reduce((sum, user) => sum + Number(user.walletBalance || 0), 0);
+
+  return {
+    totalIncome: courseIncome + walletFunding,
+    courseIncome,
+    walletFunding,
+    pendingValue,
+    totalWalletBalance,
+    successfulCount: successful.length,
+  };
+}, [transactions, users]);
 
 
   const groupedQuestions = useMemo(() => {
@@ -388,15 +435,67 @@ const saveCoursePrice = async (examType: string, subject: string) => {
         </div>
       )}
 
+      {priceToConfirm && (
+        <div className="fixed inset-0 z-[720] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white max-w-md w-full rounded-[2.5rem] p-8 shadow-2xl border border-blue-100 animate-in zoom-in-95 duration-300">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6">
+              <i className="fas fa-tag text-xl"></i>
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Confirm Price Update</h3>
+            <p className="text-sm text-slate-500 leading-relaxed mb-6">
+              Update <strong>{priceToConfirm.subject}</strong> from ₦{priceToConfirm.oldPrice.toLocaleString()} to <strong>₦{priceToConfirm.newPrice.toLocaleString()}</strong>. New payments will use this price immediately.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setPriceToConfirm(null)}
+                className="py-4 rounded-2xl bg-slate-100 text-slate-600 font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveCoursePrice}
+                className="py-4 rounded-2xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-100"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {priceMessage && (
+        <div className="fixed top-24 right-4 z-[760] w-[min(420px,calc(100vw-2rem))] animate-in slide-in-from-right duration-300">
+          <div className={`rounded-[2rem] border p-5 shadow-2xl bg-white flex items-start gap-4 ${
+            priceMessage.type === 'success' ? 'border-emerald-100' : 'border-red-100'
+          }`}>
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+              priceMessage.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+            }`}>
+              <i className={`fas ${priceMessage.type === 'success' ? 'fa-check' : 'fa-exclamation-triangle'}`}></i>
+            </div>
+            <div className="flex-grow">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                {priceMessage.type === 'success' ? 'Update Successful' : 'Action Required'}
+              </p>
+              <p className="text-sm font-bold text-slate-900 leading-snug">{priceMessage.text}</p>
+            </div>
+            <button onClick={() => setPriceMessage(null)} className="text-slate-300 hover:text-slate-500">
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Admin UI Header */}
    <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-8">
         <div>
           <p className="text-blue-600 font-black uppercase tracking-widest text-[10px] mb-2">Excellence Hub Control</p>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Super Admin Console</h1>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Administrator</h1>
         </div>
 
         <div className="bg-slate-100 p-1.5 rounded-2xl flex flex-wrap gap-2 soft-shadow">
           {[
+            { id: 'wallet', label: 'Wallet' },
             { id: 'courses', label: 'Course List' },
             { id: 'questions', label: 'Questions Hub' },
             { id: 'results', label: 'Performance' },
@@ -415,14 +514,103 @@ const saveCoursePrice = async (examType: string, subject: string) => {
         </div>
       </div>
 
+      {activeTab === 'wallet' && (
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+            {[
+              { label: 'Total Income', value: walletStats.totalIncome, icon: 'fa-chart-line', tone: 'bg-slate-900 text-white' },
+              { label: 'Course Sales', value: walletStats.courseIncome, icon: 'fa-graduation-cap', tone: 'bg-blue-600 text-white' },
+              { label: 'Wallet Funding', value: walletStats.walletFunding, icon: 'fa-wallet', tone: 'bg-emerald-600 text-white' },
+              { label: 'Pending Value', value: walletStats.pendingValue, icon: 'fa-clock', tone: 'bg-amber-500 text-white' },
+            ].map((stat) => (
+              <div key={stat.label} className={`${stat.tone} rounded-[2rem] p-7 shadow-xl relative overflow-hidden`}>
+                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-10 -mt-10"></div>
+                <div className="relative z-10 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-2">{stat.label}</p>
+                    <p className="text-3xl font-black tracking-tight">₦{stat.value.toLocaleString()}</p>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center">
+                    <i className={`fas ${stat.icon}`}></i>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-8">
+            <section className="bg-white rounded-[2.5rem] border border-slate-100 soft-shadow overflow-hidden">
+              <div className="p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Revenue Ledger</p>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Transaction History</h2>
+                </div>
+                <div className="text-sm font-bold text-slate-400">{walletStats.successfulCount} successful transactions</div>
+              </div>
+
+              <div className="divide-y divide-slate-100 max-h-[620px] overflow-y-auto custom-scrollbar">
+                {transactions.length > 0 ? transactions
+                  .slice()
+                  .sort((a, b) => (b.completedAt || b.timestamp || 0) - (a.completedAt || a.timestamp || 0))
+                  .map((tx) => {
+                    const isSuccess = tx.status === 'SUCCESS';
+                    const isWallet = tx.type === 'WALLET_FUND' || tx.category === 'WALLET_FUND';
+                    return (
+                      <div key={tx.id || tx.reference} className="p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5 hover:bg-slate-50/70 transition">
+                        <div className="flex items-start gap-4 min-w-0">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                            isSuccess ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                          }`}>
+                            <i className={`fas ${isWallet ? 'fa-wallet' : 'fa-lock-open'}`}></i>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-black text-slate-900 truncate">
+                              {isWallet ? 'Wallet Funding' : tx.item || 'Course Unlock'}
+                            </p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                              {new Date(tx.completedAt || tx.timestamp || Date.now()).toLocaleString()} · {tx.reference}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between lg:justify-end gap-5">
+                          <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                            isSuccess ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                          }`}>
+                            {tx.status}
+                          </span>
+                          <p className="text-xl font-black text-slate-900 min-w-[110px] text-right">₦{Number(tx.amount || 0).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    );
+                  }) : (
+                  <div className="p-16 text-center text-slate-400 font-bold">No transactions found yet.</div>
+                )}
+              </div>
+            </section>
+
+            <aside className="space-y-5">
+              <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 soft-shadow">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Student Wallet Liability</p>
+                <p className="text-4xl font-black text-slate-900">₦{walletStats.totalWalletBalance.toLocaleString()}</p>
+                <p className="text-xs text-slate-500 mt-4 leading-relaxed">Total unused wallet balance currently held across student accounts.</p>
+              </div>
+              <div className="bg-blue-50 rounded-[2.5rem] p-8 border border-blue-100">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-4">Quick Notes</p>
+                <p className="text-sm text-blue-900 leading-relaxed font-medium">
+                  Successful Monnify callbacks and verified returns are recorded here. Pending rows indicate students who started checkout but have not completed payment.
+                </p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      )}
+
       {/* Courses Tab */}
       {activeTab === 'courses' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {courses.map((course, idx) => {
-            const key = `${course.examType}__${course.subject}`;
-            
+          {courses.map((course) => {
             return (
-              <div key={idx} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 soft-shadow flex flex-col group relative">
+              <div key={`${course.examType}_${course.subject}`} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 soft-shadow flex flex-col group relative">
                 <div className="flex justify-between items-start mb-6">
                   <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded-lg border border-blue-100">
                     {course.examType}
@@ -442,32 +630,37 @@ const saveCoursePrice = async (examType: string, subject: string) => {
                 </div>
 
                 <h3 className="text-2xl font-black text-slate-900 mb-2">{course.subject}</h3>
-                <div className="mt-4 bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                    Course Price (₦)
-                  </p>
-                  <div className="flex gap-3 items-center">
+                <p className="text-sm text-slate-500 mb-6">Control the live one-time unlock price for this course.</p>
+                <div className="mt-auto bg-slate-50 border border-slate-100 rounded-[2rem] p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Course Price
+                    </p>
+                    <span className="px-3 py-1 rounded-full bg-white text-slate-400 border border-slate-100 text-[9px] font-black uppercase tracking-widest">
+                      Live
+                    </span>
+                  </div>
+                  <div className="flex gap-3 items-center bg-white border border-slate-200 rounded-2xl p-2 focus-within:ring-4 focus-within:ring-blue-500/10">
+                    <span className="pl-3 text-slate-400 font-black">₦</span>
                     <input
                       type="number"
-                      min={0}
+                      min={1}
                       value={getCoursePrice(course.examType, course.subject)}
                       onChange={(e) => {
                         const key = `${course.examType}_${course.subject}`;
                         setPriceDraft((prev) => ({ ...prev, [key]: Number(e.target.value) }));
                       }}
-                      className="flex-grow px-4 py-3 rounded-xl bg-white border border-slate-200 outline-none font-black text-slate-900"
+                      className="min-w-0 flex-grow py-3 bg-transparent outline-none font-black text-slate-900"
                     />
                     <button
-                      onClick={() => saveCoursePrice(course.examType, course.subject)}
-                      className="px-5 py-3 rounded-xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition"
+                      onClick={() => requestCoursePriceSave(course.examType, course.subject)}
+                      className="px-5 py-3 rounded-xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-100"
                     >
-                      Save
+                      Update
                     </button>
                   </div>
+                  <p className="mt-3 text-[11px] text-slate-400 font-medium">Changes require confirmation before going live.</p>
                 </div>
-
-
-                {/* Duplicate/old price-control removed; uses the top price input/save controls instead */}
 
                 <button
                   onClick={() => {
@@ -730,4 +923,3 @@ const saveCoursePrice = async (examType: string, subject: string) => {
 };
 
 export default AdminDashboard;
-

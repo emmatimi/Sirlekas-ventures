@@ -11,6 +11,8 @@ interface CBTTestProps {
 const CBTTest: React.FC<CBTTestProps> = ({ user }) => {
   const { examType, subject } = useParams<{ examType: string; subject: string }>();
   const navigate = useNavigate();
+  const hasFullCourseAccess =
+    !!examType && !!subject && dbService.isCoursePurchased(user, examType, subject);
   
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<{ [key: string]: number }>({});
@@ -95,8 +97,6 @@ const CBTTest: React.FC<CBTTestProps> = ({ user }) => {
 
   // Results View
   if (isFinished && result) {
-    const isSubbed = dbService.isSubscribed(user, examType || '');
-    
     return (
       <div className="min-h-screen bg-slate-50 py-12 px-4 animate-in fade-in duration-500">
         <div className="max-w-4xl mx-auto space-y-8">
@@ -119,7 +119,7 @@ const CBTTest: React.FC<CBTTestProps> = ({ user }) => {
               </div>
             </div>
 
-            {!isSubbed && (
+            {!hasFullCourseAccess && (
               <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 mb-10 flex items-center gap-4 text-left">
                 <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-blue-600 shrink-0 shadow-sm"><i className="fas fa-lock"></i></div>
                 <div>
@@ -304,7 +304,7 @@ const CBTTest: React.FC<CBTTestProps> = ({ user }) => {
           <div>
             <h3 className="text-sm md:text-lg font-black text-slate-900 uppercase tracking-tight leading-none">{subject}</h3>
             <p className="hidden md:block text-[9px] text-slate-400 font-bold tracking-widest mt-1 uppercase">
-              {examType} {!dbService.isSubscribed(user, examType || '') ? '• Free Tier Session' : '• Premium Session'}
+              {examType} {!hasFullCourseAccess ? '• Free Tier Session' : '• Full Access Session'}
             </p>
           </div>
         </div>
@@ -330,10 +330,10 @@ const CBTTest: React.FC<CBTTestProps> = ({ user }) => {
 
       <main className="flex-grow max-w-[1440px] mx-auto w-full p-4 md:p-8 lg:p-12 flex flex-col lg:flex-row gap-12 lg:px-12">
         <div className="flex-grow space-y-10">
-          {!dbService.isSubscribed(user, examType || '') && (
+          {!hasFullCourseAccess && (
             <div className="bg-amber-50 border border-amber-100 p-6 rounded-[2rem] flex items-center gap-4 text-amber-800">
                <i className="fas fa-info-circle text-2xl opacity-40"></i>
-               <p className="text-sm font-medium">You are in <strong>Free Mode</strong>. Access is restricted to the first 15 questions. Subscribe to unlock the complete syllabus.</p>
+               <p className="text-sm font-medium">You are in <strong>Free Mode</strong>. Access is restricted to the first 15 questions. Unlock this course to access the complete question bank.</p>
             </div>
           )}
 

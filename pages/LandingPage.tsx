@@ -125,16 +125,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ user }) => {
   };
 
   return (
-    <article className="overflow-x-hidden">
+    <article className="overflow-x-hidden flex flex-col">
       {/* Hero Section */}
-      <section className="relative min-h-[70vh] flex items-center bg-slate-50/50" aria-labelledby="hero-heading">
+      <section className="relative min-h-[70vh] flex items-center bg-slate-50/50 order-1" aria-labelledby="hero-heading">
         <div className="absolute inset-0 pointer-events-none z-0">
           <div className="absolute top-0 right-0 w-1/2 h-full bg-blue-50/50 rounded-bl-[100px]"></div>
         </div>
 
         <div className="max-w-[1440px] mx-auto px-4 lg:px-12 relative z-10 w-full py-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="text-center lg:text-left space-y-6 reveal">
+            <div className="text-center lg:text-left space-y-6 reveal hero-copy">
               <div className="inline-flex items-center space-x-2 bg-blue-100 text-blue-700 px-4 py-1 rounded-full font-bold text-[10px] uppercase tracking-widest">
                 <span className="flex h-1.5 w-1.5 rounded-full bg-[#FFD700] animate-pulse"></span>
                 <span>C.A.C registered</span>
@@ -164,7 +164,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user }) => {
               </div>
             </div>
 
-            <div className="relative reveal" style={{ transitionDelay: '0.2s' }}>
+            <div className="relative reveal hero-media" style={{ transitionDelay: '0.2s' }}>
               <div className="absolute -inset-3 bg-blue-100 rounded-[2.5rem] -rotate-2"></div>
               <div className="relative bg-white rounded-[2rem] overflow-hidden p-2 soft-shadow">
                 <div className="relative w-full aspect-[4/3] rounded-[1.5rem] overflow-hidden group">
@@ -190,7 +190,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user }) => {
       </section>
 
       {/* About Section */}
-      <section id="about" className="py-16 bg-white overflow-hidden scroll-mt-20" aria-labelledby="about-heading">
+      <section id="about" className="py-16 bg-white overflow-hidden scroll-mt-20 order-3" aria-labelledby="about-heading">
         <div className="max-w-[1440px] mx-auto px-4 lg:px-12">
           <div className="grid lg:grid-cols-2 gap-16 items-center mb-16 reveal">
             <div className="space-y-6">
@@ -265,7 +265,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user }) => {
       </section>
 
       {/* Services Section */}
-      <section id="services" className="py-20 bg-slate-50 relative scroll-mt-20" aria-labelledby="services-heading">
+      <section id="services" className="py-20 bg-slate-50 relative scroll-mt-20 order-2" aria-labelledby="services-heading">
         <div className="max-w-[1440px] mx-auto px-4 lg:px-12">
           <header className="text-center mb-12 reveal">
             <h2 className="text-[#0047AB] font-bold uppercase tracking-[0.2em] text-[10px] mb-2">Professional Service Catalog</h2>
@@ -280,7 +280,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user }) => {
               <button 
                 key={idx} 
                 onClick={() => handleServiceClick(service)}
-                className="group relative p-8 rounded-[2rem] bg-white border border-slate-100 hover:border-blue-100 hover:bg-slate-50 transition-all duration-500 text-left soft-shadow reveal flex flex-col h-full"
+                className="group service-card relative p-8 rounded-[2rem] bg-white border border-slate-100 hover:border-blue-100 hover:bg-slate-50 transition-all duration-500 text-left soft-shadow reveal flex flex-col h-full"
                 style={{ transitionDelay: `${idx * 0.05}s` }}
               >
                 <div className={`w-12 h-12 rounded-xl ${service.bgClass} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform flex-shrink-0`}>
@@ -299,7 +299,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user }) => {
 
       {/* Inspirational Quote */}
       {activeQuote && (
-        <section className="py-12 bg-blue-50/20 text-center" aria-label="Daily Academic Inspiration">
+        <section className="py-12 bg-blue-50/20 text-center order-4" aria-label="Daily Academic Inspiration">
           <div className="max-w-4xl mx-auto px-4 reveal">
             <i className="fas fa-quote-left text-blue-100 text-3xl mb-4" aria-hidden="true"></i>
             <blockquote className="text-2xl font-medium text-slate-800 leading-tight mb-6 italic">
@@ -311,7 +311,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user }) => {
       )}
 
       {/* CTA Section */}
-      <section className="py-20 px-4" aria-labelledby="cta-heading">
+      <section className="py-20 px-4 order-5" aria-labelledby="cta-heading">
         <div className="max-w-[1100px] mx-auto reveal">
           <div className="relative rounded-[2.5rem] bg-[#0047AB] p-10 md:p-14 overflow-hidden soft-shadow text-center">
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/circuit-board.png')] opacity-5"></div>

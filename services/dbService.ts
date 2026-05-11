@@ -16,7 +16,7 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { User, Question, ExamResult, InspirationalQuote } from '../types';
+import { User, Question, ExamResult, InspirationalQuote, Transaction } from '../types';
 
 const FALLBACK_QUESTIONS: Question[] = [
   {
@@ -88,6 +88,33 @@ export const dbService = {
     const userRef = doc(db, 'users', uid);
     const snap = await getDoc(userRef);
     return snap.exists() ? (snap.data() as User) : null;
+  },
+
+  getUsers: async (): Promise<User[]> => {
+    if (!isFirebaseReady()) return [];
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      return snap.docs.map(d => ({ uid: d.id, ...d.data() } as User));
+    } catch (err) {
+      console.error('getUsers failed', err);
+      return [];
+    }
+  },
+
+  getAllTransactions: async (): Promise<Transaction[]> => {
+    if (!isFirebaseReady()) return [];
+    try {
+      const users = await dbService.getUsers();
+      return users.flatMap((user) =>
+        (Array.isArray(user.transactions) ? user.transactions : []).map((tx) => ({
+          ...tx,
+          userId: tx.userId || user.uid,
+        }))
+      );
+    } catch (err) {
+      console.error('getAllTransactions failed', err);
+      return [];
+    }
   },
 
   getCurrentUser: (): User | null => {
