@@ -42,6 +42,27 @@ async function verifyFirebaseUser(req) {
   }
 }
 
+function getAdminEmails() {
+  return String(process.env.ADMIN_EMAILS || process.env.VITE_ADMIN_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+async function verifyAdminUser(req) {
+  const decoded = await verifyFirebaseUser(req);
+  const email = decoded.email?.trim().toLowerCase();
+  const adminEmails = getAdminEmails();
+
+  if (!email || !adminEmails.includes(email)) {
+    const err = new Error("Admin access required");
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return decoded;
+}
+
 const makeCourseKey = (examType, subject) => `${examType}_${subject}`;
 
 async function getCoursePrice(db, examType, subject) {
@@ -201,6 +222,7 @@ async function finalizePaidTransaction(rawEventData, fallback = {}) {
 module.exports = {
   initializeAdmin,
   verifyFirebaseUser,
+  verifyAdminUser,
   getCoursePrice,
   makeCourseKey,
   finalizePaidTransaction,

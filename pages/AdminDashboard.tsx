@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Question, ExamResult, InspirationalQuote, Transaction, User } from '../types';
 import { dbService } from '../services/dbService';
+import { auth } from '../services/firebase';
 
 const EXAM_CATEGORIES = ['JAMB', 'General Studies (GST)'];
 
@@ -12,6 +13,15 @@ const AdminDashboard: React.FC = () => {
   const [quotes, setQuotes] = useState<InspirationalQuote[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [walletStatsOverride, setWalletStatsOverride] = useState<{
+    totalIncome: number;
+    courseIncome: number;
+    walletFunding: number;
+    pendingValue: number;
+    totalWalletBalance: number;
+    successfulCount: number;
+  } | null>(null);
+  const [walletLoadError, setWalletLoadError] = useState('');
   const [editingQuestion, setEditingQuestion] = useState<Partial<Question> | null>(null);
   const [editingQuote, setEditingQuote] = useState<Partial<InspirationalQuote> | null>(null);
   const [questionSearch, setQuestionSearch] = useState('');
@@ -41,14 +51,47 @@ const getCoursePrice = (examType: string, subject: string) =>
 const hasCoursePriceChanged = (examType: string, subject: string) =>
   Number(getCoursePrice(examType, subject)) !== Number(coursePrices[getPriceKey(examType, subject)] ?? 300);
 
+const refreshWalletSummary = useCallback(async () => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error('Admin session expired. Please sign in again.');
+
+    const resp = await fetch('/api/admin/wallet-summary', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || 'Failed to load wallet summary');
+
+    setWalletStatsOverride(data.stats || null);
+    setTransactions(Array.isArray(data.transactions) ? data.transactions : []);
+    setUsers(
+      Array.isArray(data.topWalletUsers)
+        ? data.topWalletUsers.map((user: any) => ({
+            uid: user.uid,
+            name: user.name || user.email || 'Student',
+            email: user.email || '',
+            role: 'student',
+            walletBalance: Number(user.walletBalance || 0),
+            purchasedCourses: [],
+            createdAt: Date.now(),
+          }))
+        : []
+    );
+    setWalletLoadError('');
+  } catch (err: any) {
+    console.error('refreshWalletSummary failed', err);
+    setWalletLoadError(err?.message || 'Failed to load wallet summary');
+    setWalletStatsOverride(null);
+  }
+}, []);
+
 const refreshData = useCallback(async () => {
-  const [allQs, allResults, allQuotes, prices, allUsers, allTransactions] = await Promise.all([
+  const [allQs, allResults, allQuotes, prices] = await Promise.all([
     dbService.getQuestions(),
     dbService.getResults(),
     dbService.getQuotes(),
     dbService.getCoursePrices(),
-    dbService.getUsers(),
-    dbService.getAllTransactions(),
   ]);
 
   setQuestions(allQs);
@@ -56,9 +99,8 @@ const refreshData = useCallback(async () => {
   setQuotes(allQuotes);
   setCoursePrices(prices || {});
   setPriceDraft(prices || {});
-  setUsers(allUsers);
-  setTransactions(allTransactions);
-}, []);
+  await refreshWalletSummary();
+}, [refreshWalletSummary]);
 
 useEffect(() => {
   void refreshData();
@@ -99,6 +141,7 @@ const saveCoursePrice = async () => {
 };
 
 const walletStats = useMemo(() => {
+  if (walletStatsOverride) return walletStatsOverride;
   const successful = transactions.filter((tx) => tx.status === 'SUCCESS');
   const courseIncome = successful
     .filter((tx) => tx.type === 'COURSE_UNLOCK' || tx.category === 'COURSE_PURCHASE')
@@ -119,7 +162,7 @@ const walletStats = useMemo(() => {
     totalWalletBalance,
     successfulCount: successful.length,
   };
-}, [transactions, users]);
+}, [transactions, users, walletStatsOverride]);
 
 const topWalletUsers = useMemo(
   () =>
@@ -527,6 +570,18 @@ const topWalletUsers = useMemo(
 
       {activeTab === 'wallet' && (
         <div className="space-y-8 animate-in fade-in duration-500">
+          {walletLoadError && (
+            <div className="bg-red-50 border border-red-100 rounded-[2rem] p-5 flex items-start gap-4">
+              <div className="w-11 h-11 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                <i className="fas fa-exclamation-triangle"></i>
+              </div>
+              <div>
+                <p className="text-sm font-black text-red-900">Wallet data could not be loaded</p>
+                <p className="text-xs text-red-700 mt-1">{walletLoadError}</p>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
             {[
               { label: 'Total Income', value: walletStats.totalIncome, icon: 'fa-chart-line', tone: 'bg-slate-900 text-white' },
