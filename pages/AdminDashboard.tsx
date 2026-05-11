@@ -38,6 +38,8 @@ const AdminDashboard: React.FC = () => {
 const getPriceKey = (examType: string, subject: string) => `${examType}_${subject}`;
 const getCoursePrice = (examType: string, subject: string) =>
   priceDraft[getPriceKey(examType, subject)] ?? coursePrices[getPriceKey(examType, subject)] ?? 300;
+const hasCoursePriceChanged = (examType: string, subject: string) =>
+  Number(getCoursePrice(examType, subject)) !== Number(coursePrices[getPriceKey(examType, subject)] ?? 300);
 
 const refreshData = useCallback(async () => {
   const [allQs, allResults, allQuotes, prices, allUsers, allTransactions] = await Promise.all([
@@ -653,8 +655,9 @@ const walletStats = useMemo(() => {
                       className="min-w-0 flex-grow py-3 bg-transparent outline-none font-black text-slate-900"
                     />
                     <button
+                      disabled={!hasCoursePriceChanged(course.examType, course.subject)}
                       onClick={() => requestCoursePriceSave(course.examType, course.subject)}
-                      className="px-5 py-3 rounded-xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-100"
+                      className="px-5 py-3 rounded-xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-100 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed"
                     >
                       Update
                     </button>

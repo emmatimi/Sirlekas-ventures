@@ -13,6 +13,9 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './services/firebase.ts';
 import { getRoleForEmail } from './services/roles.ts';
 
+const INACTIVITY_LOGOUT_MS = 48 * 60 * 60 * 1000;
+const LAST_ACTIVITY_KEY = 'sirlekas_last_activity_at';
+
 const ScrollToTop = () => {
   const { pathname, hash } = useLocation();
   useEffect(() => {
@@ -138,6 +141,17 @@ const App: React.FC = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        const now = Date.now();
+        const lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY) || now);
+        if (now - lastActivity >= INACTIVITY_LOGOUT_MS) {
+          localStorage.removeItem(LAST_ACTIVITY_KEY);
+          await signOut(auth);
+          setUser(null);
+          setLoading(false);
+          navigate('/auth', { replace: true });
+          return;
+        }
+        localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
         const role = getRoleForEmail(firebaseUser.email);
         const syncedUser = await dbService.syncUser(firebaseUser, role);
         setUser(syncedUser);
@@ -147,7 +161,45 @@ const App: React.FC = () => {
       setLoading(false);
     });
     return unsubscribe;
-  }, []);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!user) {
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+      return;
+    }
+
+    let lastWrite = 0;
+    const markActivity = () => {
+      const now = Date.now();
+      if (now - lastWrite < 30000) return;
+      lastWrite = now;
+      localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+    };
+
+    const checkInactivity = async () => {
+      const lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY) || Date.now());
+      if (Date.now() - lastActivity >= INACTIVITY_LOGOUT_MS) {
+        localStorage.removeItem(LAST_ACTIVITY_KEY);
+        await signOut(auth);
+        setUser(null);
+        setIsMobileMenuOpen(false);
+        navigate('/auth', { replace: true });
+      }
+    };
+
+    markActivity();
+    const events: Array<keyof WindowEventMap> = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'];
+    events.forEach((eventName) => window.addEventListener(eventName, markActivity, { passive: true }));
+    document.addEventListener('visibilitychange', checkInactivity);
+    const interval = window.setInterval(() => void checkInactivity(), 60 * 1000);
+
+    return () => {
+      events.forEach((eventName) => window.removeEventListener(eventName, markActivity));
+      document.removeEventListener('visibilitychange', checkInactivity);
+      window.clearInterval(interval);
+    };
+  }, [navigate, user]);
 
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
@@ -172,6 +224,7 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
     await signOut(auth);
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
     setUser(null);
     setIsMobileMenuOpen(false);
     navigate('/');

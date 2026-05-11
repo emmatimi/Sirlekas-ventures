@@ -197,8 +197,14 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("INIT ERROR:", error);
 
-    return res.status(error.statusCode || 500).json({
-      error: error.message || "Failed to initialize payment",
+    const status = error.statusCode || 500;
+    const safeMessage =
+      status >= 500
+        ? "Payment service is temporarily unavailable. Please contact support."
+        : error.message || "Failed to initialize payment";
+
+    return res.status(status).json({
+      error: safeMessage,
     });
   }
 }
