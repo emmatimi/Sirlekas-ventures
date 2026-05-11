@@ -8,11 +8,21 @@ const {
   finalizePaidTransaction,
 } = require("./_payment-admin.cjs");
 
+function getMonnifyOrigin() {
+  return String(MONNIFY_BASE_URL || "")
+    .replace(/\/+$/, "")
+    .replace(/\/api\/v\d+$/i, "");
+}
+
+function monnifyUrl(path) {
+  return `${getMonnifyOrigin()}${path}`;
+}
+
 async function getMonnifyToken(apiKey, secretKey) {
   const basic = Buffer.from(`${apiKey}:${secretKey}`).toString("base64");
 
   const resp = await axios.post(
-    `${MONNIFY_BASE_URL}/auth/login`,
+    monnifyUrl("/api/v1/auth/login"),
     {},
     {
       headers: { Authorization: `Basic ${basic}` },
@@ -76,7 +86,7 @@ export default async function handler(req, res) {
     let responseData;
     try {
       const response = await axios.get(
-        `${MONNIFY_BASE_URL}/transactions/query`,
+        monnifyUrl("/api/v2/merchant/transactions/query"),
         {
           params,
           headers: {
