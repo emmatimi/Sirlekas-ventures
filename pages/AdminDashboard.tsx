@@ -60,8 +60,16 @@ const refreshWalletSummary = useCallback(async () => {
       headers: { Authorization: `Bearer ${token}` },
     });
 
+    const contentType = resp.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error('Wallet API is not deployed correctly. Redeploy the latest API route.');
+    }
+
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.error || 'Failed to load wallet summary');
+    if (!data.stats || !Array.isArray(data.transactions)) {
+      throw new Error('Wallet API returned an invalid response.');
+    }
 
     setWalletStatsOverride(data.stats || null);
     setTransactions(Array.isArray(data.transactions) ? data.transactions : []);

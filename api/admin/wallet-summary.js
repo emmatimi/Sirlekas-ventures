@@ -1,3 +1,6 @@
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
 const {
   initializeAdmin,
   verifyAdminUser,
@@ -18,7 +21,13 @@ function normalizeTransaction(tx, usersById, fallbackUser) {
 
   const user = usersById.get(tx.userId) || fallbackUser || {};
   const status = tx.status || "PENDING";
-  const type = tx.type || (tx.category === "WALLET_FUND" ? "WALLET_FUND" : tx.category === "COURSE_PURCHASE" ? "COURSE_UNLOCK" : undefined);
+  const type =
+    tx.type ||
+    (tx.category === "WALLET_FUND"
+      ? "WALLET_FUND"
+      : tx.category === "COURSE_PURCHASE"
+        ? "COURSE_UNLOCK"
+        : undefined);
 
   return {
     id: tx.id || `TX-${reference}`,
@@ -28,7 +37,13 @@ function normalizeTransaction(tx, usersById, fallbackUser) {
     userEmail: tx.userEmail || tx.email || user.email || "",
     category: tx.category || (type === "WALLET_FUND" ? "WALLET_FUND" : "COURSE_PURCHASE"),
     type,
-    item: tx.item || (type === "WALLET_FUND" ? "Wallet Funding" : tx.subject && tx.examType ? `${tx.subject} (${tx.examType})` : "Course Unlock"),
+    item:
+      tx.item ||
+      (type === "WALLET_FUND"
+        ? "Wallet Funding"
+        : tx.subject && tx.examType
+          ? `${tx.subject} (${tx.examType})`
+          : "Course Unlock"),
     amount: Number(tx.amount || 0),
     status,
     timestamp: toMillis(tx.timestamp),
@@ -36,7 +51,7 @@ function normalizeTransaction(tx, usersById, fallbackUser) {
   };
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   try {
     if (req.method !== "GET") {
       return res.status(405).json({ error: "Method Not Allowed" });
@@ -118,4 +133,4 @@ module.exports = async function handler(req, res) {
       error: err.statusCode && err.statusCode < 500 ? err.message : "Failed to load wallet summary",
     });
   }
-};
+}
