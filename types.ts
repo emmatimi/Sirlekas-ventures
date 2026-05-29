@@ -41,6 +41,50 @@ export interface InspirationalQuote {
   author: string;
 }
 
+export interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  tags?: string[];
+  faqs?: Array<{
+    question: string;
+    answer: string;
+  }>;
+  coverImage?: string;
+  author: string;
+  status: 'draft' | 'published';
+  featured?: boolean;
+  trending?: boolean;
+  readTime?: number;
+  viewCount?: number;
+  createdAt: number;
+  updatedAt?: number;
+  publishedAt?: number;
+}
+
+export interface CGPACourse {
+  id: string;
+  name: string;
+  unit: number;
+  grade: string;
+}
+
+export interface CGPARecord {
+  id: string;
+  userId: string;
+  session: string;
+  semester: string;
+  courses: CGPACourse[];
+  totalUnits: number;
+  totalPoints: number;
+  gpa: number;
+  createdAt: number;
+  updatedAt?: number;
+}
+
 export interface Transaction {
   id?: string;
   reference: string;

@@ -9,6 +9,7 @@ import StudentDashboard from './pages/StudentDashboard.tsx';
 import CBTTest from './pages/CBTTest.tsx';
 import AdminDashboard from './pages/AdminDashboard.tsx';
 import CGPACalculator from './pages/CGPACalculator.tsx';
+import BlogPage from './pages/BlogPage.tsx';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './services/firebase.ts';
 import { getRoleForEmail } from './services/roles.ts';
@@ -57,6 +58,9 @@ const SEOMetadata = () => {
     } else if (pathname.includes('/cgpa-calculator')) {
       title = 'Accurate EKSU CGPA Calculator | Sirlekas Digital Hub';
       description = 'Calculate your Semester GPA and Cumulative CGPA with our professional 5.0 scale tool. Includes standard Nigerian university grade conversion charts.';
+    } else if (pathname.includes('/blog')) {
+      title = 'Student News, Articles & Academic Updates | Sirlekas Ventures';
+      description = 'Read student-focused news, EKSU updates, study guides, admission tips, CBT preparation notes, and academic articles from Sirlekas Ventures.';
     }
 
     document.title = title;
@@ -260,6 +264,7 @@ const App: React.FC = () => {
     { label: 'Services', to: '/#services' },
     ...(user?.role === 'student' ? [{ label: 'Dashboard', to: '/dashboard' }] : []),
     ...(user?.role === 'admin' ? [{ label: 'Admin', to: '/admin' }] : []),
+    { label: 'Blog', to: '/blog' },
     { label: 'CGPA Calc', to: '/cgpa-calculator' },
     { label: 'About', to: '/#about' },
   ];
@@ -452,7 +457,9 @@ const App: React.FC = () => {
                   element={user && role === 'admin' ? <AdminDashboard /> : <Navigate to="/auth" replace />}
                 />
 
-                <Route path="/cgpa-calculator" element={<CGPACalculator />} />
+                <Route path="/blog" element={<BlogPage />} />
+                <Route path="/blog/:id" element={<BlogPage />} />
+                <Route path="/cgpa-calculator" element={<CGPACalculator user={user} />} />
               </Routes>
 
         )}

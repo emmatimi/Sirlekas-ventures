@@ -1,16 +1,35 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Question, ExamResult, InspirationalQuote, Transaction, User } from '../types';
+import { Question, ExamResult, InspirationalQuote, Transaction, User, BlogPost } from '../types';
 import { dbService } from '../services/dbService';
 import { auth } from '../services/firebase';
 
 const EXAM_CATEGORIES = ['JAMB', 'General Studies (GST)'];
 
+const parseBlogTags = (value: string) =>
+  value.split(',').map((tag) => tag.trim()).filter(Boolean);
+
+const formatBlogFaqs = (faqs: BlogPost['faqs'] = []) =>
+  faqs.map((faq) => `${faq.question} | ${faq.answer}`).join('\n');
+
+const parseBlogFaqs = (value: string): BlogPost['faqs'] =>
+  value
+    .split('\n')
+    .map((line) => {
+      const [question, ...answerParts] = line.split('|');
+      return {
+        question: question?.trim() || '',
+        answer: answerParts.join('|').trim(),
+      };
+    })
+    .filter((faq) => faq.question && faq.answer);
+
 const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'wallet' | 'questions' | 'results' | 'courses' | 'quotes'>('courses');
+  const [activeTab, setActiveTab] = useState<'wallet' | 'questions' | 'results' | 'courses' | 'quotes' | 'blog'>('courses');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [results, setResults] = useState<ExamResult[]>([]);
   const [quotes, setQuotes] = useState<InspirationalQuote[]>([]);
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [walletStatsOverride, setWalletStatsOverride] = useState<{
@@ -25,6 +44,7 @@ const AdminDashboard: React.FC = () => {
   const [walletLoadError, setWalletLoadError] = useState('');
   const [editingQuestion, setEditingQuestion] = useState<Partial<Question> | null>(null);
   const [editingQuote, setEditingQuote] = useState<Partial<InspirationalQuote> | null>(null);
+  const [editingBlogPost, setEditingBlogPost] = useState<Partial<BlogPost> | null>(null);
   const [questionSearch, setQuestionSearch] = useState('');
   const [coursePrices, setCoursePrices] = useState<Record<string, number>>({});
   const [priceDraft, setPriceDraft] = useState<Record<string, number>>({});
@@ -96,16 +116,18 @@ const refreshWalletSummary = useCallback(async () => {
 }, []);
 
 const refreshData = useCallback(async () => {
-  const [allQs, allResults, allQuotes, prices] = await Promise.all([
+  const [allQs, allResults, allQuotes, allBlogPosts, prices] = await Promise.all([
     dbService.getQuestions(),
     dbService.getResults(),
     dbService.getQuotes(),
+    dbService.getBlogPosts(true),
     dbService.getCoursePrices(),
   ]);
 
   setQuestions(allQs);
   setResults(allResults);
   setQuotes(allQuotes);
+  setBlogPosts(allBlogPosts);
   setCoursePrices(prices || {});
   setPriceDraft(prices || {});
   await refreshWalletSummary();
@@ -363,6 +385,42 @@ const topWalletUsers = useMemo(
     await refreshData();
   };
 
+  const handleSaveBlogPost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBlogPost) return;
+
+    const now = Date.now();
+    const post: BlogPost = {
+      id: editingBlogPost.id || Math.random().toString(36).slice(2, 11),
+      title: editingBlogPost.title?.trim() || 'Untitled Article',
+      slug: editingBlogPost.slug?.trim() || '',
+      excerpt: editingBlogPost.excerpt?.trim() || '',
+      content: editingBlogPost.content?.trim() || '',
+      category: editingBlogPost.category?.trim() || 'News',
+      tags: Array.isArray(editingBlogPost.tags) ? editingBlogPost.tags : [],
+      faqs: Array.isArray(editingBlogPost.faqs) ? editingBlogPost.faqs : [],
+      coverImage: editingBlogPost.coverImage?.trim() || '',
+      author: editingBlogPost.author?.trim() || 'Sirlekas Ventures',
+      status: editingBlogPost.status || 'draft',
+      featured: Boolean(editingBlogPost.featured),
+      trending: Boolean(editingBlogPost.trending),
+      readTime: editingBlogPost.readTime || undefined,
+      viewCount: Number(editingBlogPost.viewCount || 0),
+      createdAt: editingBlogPost.createdAt || now,
+      updatedAt: now,
+      publishedAt: editingBlogPost.status === 'published' ? (editingBlogPost.publishedAt || now) : editingBlogPost.publishedAt,
+    };
+
+    await dbService.saveBlogPost(post);
+    setEditingBlogPost(null);
+    await refreshData();
+  };
+
+  const handleDeleteBlogPost = async (id: string) => {
+    await dbService.deleteBlogPost(id);
+    await refreshData();
+  };
+
   return (
     <div className="max-w-[1440px] mx-auto px-4 lg:px-12 py-16 animate-in fade-in duration-500">
       
@@ -562,6 +620,7 @@ const topWalletUsers = useMemo(
             { id: 'wallet', label: 'Wallet' },
             { id: 'courses', label: 'Course List' },
             { id: 'questions', label: 'Questions Hub' },
+            { id: 'blog', label: 'Blog' },
             { id: 'results', label: 'Performance' },
             { id: 'quotes', label: 'Motivational' },
           ].map((tab) => (
@@ -873,6 +932,72 @@ const topWalletUsers = useMemo(
         </div>
       )}
 
+      {activeTab === 'blog' && (
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 soft-shadow p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Content Desk</p>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Blog Articles</h2>
+              <p className="text-sm text-slate-500 mt-2">Publish student news, study guides, and academic updates.</p>
+            </div>
+            <button
+              onClick={() => setEditingBlogPost({ title: '', excerpt: '', content: '', category: 'News', tags: [], faqs: [], author: 'Sirlekas Ventures', status: 'draft', featured: false, trending: false, viewCount: 0 })}
+              className="px-6 py-4 rounded-2xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-100"
+            >
+              <i className="fas fa-plus mr-2"></i>
+              New Article
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {blogPosts.length > 0 ? blogPosts.map((post) => (
+              <article key={post.id} className="bg-white rounded-[2.5rem] border border-slate-100 soft-shadow overflow-hidden">
+                {post.coverImage && (
+                  <img src={post.coverImage} alt="" className="w-full aspect-[16/6] object-cover" />
+                )}
+                <div className="p-8">
+                  <div className="flex items-center justify-between gap-4 mb-5">
+                    <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest">
+                      {post.category || 'News'}
+                    </span>
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                      post.status === 'published' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                    }`}>
+                      {post.status}
+                    </span>
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-3">{post.title}</h3>
+                  <p className="text-sm text-slate-500 leading-relaxed mb-6">{post.excerpt || 'No excerpt added yet.'}</p>
+                  {post.tags && post.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {post.tags.slice(0, 5).map((tag) => (
+                        <span key={tag} className="px-2.5 py-1 rounded-full bg-slate-50 text-slate-500 border border-slate-100 text-[9px] font-black uppercase tracking-widest">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-5 border-t border-slate-100">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : 'Not published'}
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditingBlogPost(post)} className="px-4 py-2 rounded-xl bg-blue-50 text-blue-600 font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition">Edit</button>
+                      <button onClick={() => handleDeleteBlogPost(post.id)} className="px-4 py-2 rounded-xl bg-red-50 text-red-500 font-black text-[10px] uppercase tracking-widest hover:bg-red-600 hover:text-white transition">Delete</button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            )) : (
+              <div className="lg:col-span-2 py-24 text-center bg-white rounded-[3rem] border border-slate-100 border-dashed">
+                <i className="fas fa-newspaper text-slate-100 text-7xl mb-6"></i>
+                <p className="text-slate-400 font-bold text-lg">No articles have been created yet.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {activeTab === 'results' && (
         <div className="bg-white rounded-[2.5rem] overflow-hidden border border-slate-100 soft-shadow animate-in fade-in duration-500">
           <table className="w-full text-left">
@@ -998,6 +1123,148 @@ const topWalletUsers = useMemo(
               <div className="flex gap-4 pt-4">
                 <button type="submit" className="flex-grow bg-[#0047AB] text-white py-6 rounded-3xl font-black shadow-xl shadow-blue-100 hover:bg-blue-800 transition-all transform active:scale-95 uppercase tracking-widest text-sm">
                   Commit to Knowledge Base
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingBlogPost && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white max-w-4xl w-full rounded-[3rem] p-8 md:p-10 shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="flex justify-between items-start gap-6 mb-8">
+              <div>
+                <p className="text-blue-600 text-[10px] font-black uppercase tracking-widest mb-2">Blog Editor</p>
+                <h3 className="text-3xl font-black text-slate-900 tracking-tight">{editingBlogPost.id ? 'Edit Article' : 'Create Article'}</h3>
+              </div>
+              <button onClick={() => setEditingBlogPost(null)} className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 hover:text-red-500 transition-all">
+                <i className="fas fa-times text-xl"></i>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBlogPost} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Title</label>
+                  <input
+                    required
+                    value={editingBlogPost.title || ''}
+                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, title: e.target.value })}
+                    className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-black text-slate-900 focus:ring-4 focus:ring-blue-500/10"
+                    placeholder="Article headline"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</label>
+                  <input
+                    value={editingBlogPost.category || ''}
+                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, category: e.target.value })}
+                    className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold text-slate-900"
+                    placeholder="News"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</label>
+                  <select
+                    value={editingBlogPost.status || 'draft'}
+                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, status: e.target.value as BlogPost['status'] })}
+                    className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-black text-slate-900"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Author</label>
+                  <input
+                    value={editingBlogPost.author || ''}
+                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, author: e.target.value })}
+                    className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold text-slate-900"
+                    placeholder="Sirlekas Ventures"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cover Image URL</label>
+                  <input
+                    value={editingBlogPost.coverImage || ''}
+                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, coverImage: e.target.value })}
+                    className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold text-slate-900"
+                    placeholder="https://..."
+                  />
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tags</label>
+                  <input
+                    value={(editingBlogPost.tags || []).join(', ')}
+                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, tags: parseBlogTags(e.target.value) })}
+                    className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold text-slate-900"
+                    placeholder="EKSU Admission, School Fees, Post UTME"
+                  />
+                </div>
+                <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label className="flex items-center justify-between gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer">
+                    <span>
+                      <span className="block text-sm font-black text-slate-900">Featured Article</span>
+                      <span className="block text-xs font-bold text-slate-400 mt-1">Show as the main blog story.</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingBlogPost.featured)}
+                      onChange={(e) => setEditingBlogPost({ ...editingBlogPost, featured: e.target.checked })}
+                      className="w-5 h-5 accent-blue-600"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer">
+                    <span>
+                      <span className="block text-sm font-black text-slate-900">Trending</span>
+                      <span className="block text-xs font-bold text-slate-400 mt-1">Pin into trending news.</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingBlogPost.trending)}
+                      onChange={(e) => setEditingBlogPost({ ...editingBlogPost, trending: e.target.checked })}
+                      className="w-5 h-5 accent-blue-600"
+                    />
+                  </label>
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Excerpt</label>
+                  <textarea
+                    required
+                    value={editingBlogPost.excerpt || ''}
+                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, excerpt: e.target.value })}
+                    className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold text-slate-900 min-h-[90px]"
+                    placeholder="Short summary shown on the blog page"
+                  />
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Article Body</label>
+                  <textarea
+                    required
+                    value={editingBlogPost.content || ''}
+                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, content: e.target.value })}
+                    className="w-full p-6 bg-slate-50 rounded-[2rem] outline-none border border-slate-100 font-medium text-slate-800 leading-relaxed min-h-[240px]"
+                    placeholder="Use blank lines between paragraphs."
+                  />
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FAQ Blocks</label>
+                  <textarea
+                    value={formatBlogFaqs(editingBlogPost.faqs)}
+                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, faqs: parseBlogFaqs(e.target.value) })}
+                    className="w-full p-6 bg-slate-50 rounded-[2rem] outline-none border border-slate-100 font-medium text-slate-800 leading-relaxed min-h-[140px]"
+                    placeholder="Question | Answer&#10;Can I gain admission with 150? | It depends on the course and screening score."
+                  />
+                  <p className="text-xs text-slate-400 font-bold">Use one FAQ per line. Separate the question and answer with a vertical bar.</p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                <button type="submit" className="flex-grow bg-blue-600 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-700 transition">
+                  Save Article
+                </button>
+                <button type="button" onClick={() => setEditingBlogPost(null)} className="px-8 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">
+                  Cancel
                 </button>
               </div>
             </form>

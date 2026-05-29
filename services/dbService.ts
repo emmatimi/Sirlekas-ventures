@@ -16,7 +16,7 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { User, Question, ExamResult, InspirationalQuote, Transaction } from '../types';
+import { User, Question, ExamResult, InspirationalQuote, Transaction, BlogPost, CGPARecord } from '../types';
 
 const FALLBACK_QUESTIONS: Question[] = [
   {
@@ -33,6 +33,57 @@ const FALLBACK_QUOTES: InspirationalQuote[] = [
   { id: 'q1', text: "Excellence is not a destination, it's a continuous journey.", author: "Sirlekas Ventures" }
 ];
 
+const FALLBACK_BLOG_POSTS: BlogPost[] = [
+  {
+    id: 'exam-readiness-guide',
+    title: 'How to Build a Strong CBT Practice Routine',
+    slug: 'exam-readiness-guide',
+    excerpt: 'A practical guide for students preparing for JAMB, GST, and school-based CBT assessments.',
+    content: 'Consistency matters more than long panic sessions. Start with a focused daily block, review missed questions immediately, and track the subjects where your confidence is weakest.\n\nUse timed practice at least twice weekly so your speed improves with accuracy. After each session, write down the topics you missed and revisit them before attempting another full mock.\n\nA strong routine should include revision, practice, correction, and rest. When those four parts are balanced, exam day becomes less frightening and more familiar.',
+    category: 'Study Guide',
+    tags: ['CBT', 'Study Tips', 'JAMB'],
+    faqs: [
+      {
+        question: 'How often should I practice CBT questions?',
+        answer: 'A focused daily practice block is better than waiting for long weekend sessions. Review mistakes immediately after each attempt.',
+      },
+    ],
+    coverImage: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1200&q=80',
+    author: 'Sirlekas Ventures',
+    status: 'published',
+    featured: true,
+    trending: true,
+    readTime: 3,
+    viewCount: 108,
+    createdAt: Date.now() - 86400000,
+    publishedAt: Date.now() - 86400000,
+  },
+  {
+    id: 'cgpa-planning',
+    title: 'Using Semester GPA to Protect Your Final CGPA',
+    slug: 'cgpa-planning',
+    excerpt: 'Learn how credit units and grades combine so you can plan each semester with clearer targets.',
+    content: 'Your CGPA is affected most by courses with higher credit units. That means a three-unit course has more weight than a one-unit course, even when the letter grade looks the same.\n\nBefore exams, list your courses by credit unit and prioritize the ones that can move your GPA the most. After results are released, save each semester record so you can see the direction of your academic standing early.\n\nThe earlier you track your results, the easier it is to correct a weak semester before it becomes a final-year problem.',
+    category: 'Academics',
+    tags: ['CGPA', 'Academic Planning', 'Students'],
+    faqs: [
+      {
+        question: 'Why should I save semester GPA records?',
+        answer: 'Saved semester records make it easier to track your cumulative CGPA early and plan what grades you need next.',
+      },
+    ],
+    coverImage: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80',
+    author: 'Sirlekas Ventures',
+    status: 'published',
+    featured: false,
+    trending: true,
+    readTime: 3,
+    viewCount: 74,
+    createdAt: Date.now() - 172800000,
+    publishedAt: Date.now() - 172800000,
+  },
+];
+
 const makeCourseKey = (examType: string, subject: string) => `${examType}_${subject}`;
 
 const isFirebaseReady = () => !!db && !!import.meta.env.VITE_FIREBASE_API_KEY;
@@ -45,6 +96,40 @@ const toMillis = (value: any): number => {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : Date.now();
 };
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || Math.random().toString(36).slice(2, 10);
+
+const cgpaStorageKey = (userId: string) => `sirlekas_cgpa_records_${userId}`;
+
+const estimateReadTime = (content: string) => {
+  const words = content.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / 220));
+};
+
+const normalizeBlogPost = (id: string, data: any): BlogPost => ({
+  id,
+  ...data,
+  slug: data.slug || slugify(data.title || id),
+  category: data.category || 'News',
+  tags: Array.isArray(data.tags) ? data.tags.filter(Boolean) : [],
+  faqs: Array.isArray(data.faqs)
+    ? data.faqs.filter((faq: any) => faq?.question && faq?.answer)
+    : [],
+  author: data.author || 'Sirlekas Ventures',
+  status: data.status || 'draft',
+  featured: Boolean(data.featured),
+  trending: Boolean(data.trending),
+  readTime: Number(data.readTime || estimateReadTime(data.content || '')),
+  viewCount: Number(data.viewCount || 0),
+  createdAt: toMillis(data.createdAt),
+  updatedAt: data.updatedAt ? toMillis(data.updatedAt) : undefined,
+  publishedAt: data.publishedAt ? toMillis(data.publishedAt) : undefined,
+});
  
 export const dbService = {
   syncUser: async (firebaseUser: any, role: string = 'student'): Promise<User> => {
@@ -318,6 +403,149 @@ export const dbService = {
     } catch {
       return FALLBACK_QUOTES;
     }
+  },
+
+  getBlogPosts: async (includeDrafts = false): Promise<BlogPost[]> => {
+    if (!isFirebaseReady()) {
+      const stored = JSON.parse(localStorage.getItem('sirlekas_blog_posts') || '[]') as BlogPost[];
+      const posts = (stored.length > 0 ? stored : FALLBACK_BLOG_POSTS).map((post) => normalizeBlogPost(post.id, post));
+      return posts
+        .filter((post) => includeDrafts || post.status === 'published')
+        .sort((a, b) => (b.publishedAt || b.createdAt || 0) - (a.publishedAt || a.createdAt || 0));
+    }
+
+    try {
+      const snap = await getDocs(collection(db, 'blogPosts'));
+      const posts = snap.docs.map((d) => normalizeBlogPost(d.id, d.data()));
+
+      const visible = includeDrafts ? posts : posts.filter((post) => post.status === 'published');
+      return visible.sort((a, b) => (b.publishedAt || b.createdAt || 0) - (a.publishedAt || a.createdAt || 0));
+    } catch (err) {
+      console.error('getBlogPosts failed', err);
+      return FALLBACK_BLOG_POSTS.filter((post) => includeDrafts || post.status === 'published');
+    }
+  },
+
+  getBlogPost: async (idOrSlug: string): Promise<BlogPost | null> => {
+    const posts = await dbService.getBlogPosts(true);
+    return posts.find((post) => post.id === idOrSlug || post.slug === idOrSlug) || null;
+  },
+
+  saveBlogPost: async (post: BlogPost) => {
+    const now = Date.now();
+    const id = post.id || Math.random().toString(36).slice(2, 11);
+    const payload: BlogPost = {
+      ...post,
+      id,
+      slug: post.slug || slugify(post.title),
+      tags: Array.isArray(post.tags) ? post.tags.map((tag) => tag.trim()).filter(Boolean) : [],
+      faqs: Array.isArray(post.faqs) ? post.faqs.filter((faq) => faq.question?.trim() && faq.answer?.trim()) : [],
+      author: post.author || 'Sirlekas Ventures',
+      category: post.category || 'News',
+      featured: Boolean(post.featured),
+      trending: Boolean(post.trending),
+      readTime: post.readTime || estimateReadTime(post.content || ''),
+      viewCount: Number(post.viewCount || 0),
+      createdAt: post.createdAt || now,
+      updatedAt: now,
+      publishedAt: post.status === 'published' ? (post.publishedAt || now) : post.publishedAt,
+    };
+
+    if (!isFirebaseReady()) {
+      const current = JSON.parse(localStorage.getItem('sirlekas_blog_posts') || '[]') as BlogPost[];
+      const next = current.filter((item) => item.id !== id).concat(payload);
+      localStorage.setItem('sirlekas_blog_posts', JSON.stringify(next));
+      return;
+    }
+
+    await setDoc(doc(db, 'blogPosts', id), payload);
+  },
+
+  incrementBlogPostView: async (id: string) => {
+    if (!id) return;
+    if (!isFirebaseReady()) {
+      const current = JSON.parse(localStorage.getItem('sirlekas_blog_posts') || '[]') as BlogPost[];
+      const source = current.length > 0 ? current : FALLBACK_BLOG_POSTS;
+      const updated = source.map((post) => (
+        post.id === id ? { ...post, viewCount: Number(post.viewCount || 0) + 1 } : post
+      ));
+      localStorage.setItem('sirlekas_blog_posts', JSON.stringify(updated));
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'blogPosts', id), { viewCount: increment(1) });
+    } catch (err) {
+      console.warn('incrementBlogPostView failed', err);
+    }
+  },
+
+  deleteBlogPost: async (id: string) => {
+    if (!isFirebaseReady()) {
+      const current = JSON.parse(localStorage.getItem('sirlekas_blog_posts') || '[]') as BlogPost[];
+      localStorage.setItem('sirlekas_blog_posts', JSON.stringify(current.filter((item) => item.id !== id)));
+      return;
+    }
+
+    await deleteDoc(doc(db, 'blogPosts', id));
+  },
+
+  getCgpaRecords: async (userId: string): Promise<CGPARecord[]> => {
+    if (!userId) return [];
+    if (!isFirebaseReady()) {
+      return JSON.parse(localStorage.getItem(cgpaStorageKey(userId)) || '[]');
+    }
+
+    try {
+      const snap = await getDocs(collection(db, 'users', userId, 'cgpaRecords'));
+      return snap.docs
+        .map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            ...data,
+            createdAt: toMillis(data.createdAt),
+            updatedAt: data.updatedAt ? toMillis(data.updatedAt) : undefined,
+          } as CGPARecord;
+        })
+        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    } catch (err) {
+      console.error('getCgpaRecords failed', err);
+      return [];
+    }
+  },
+
+  saveCgpaRecord: async (userId: string, record: CGPARecord) => {
+    const now = Date.now();
+    const id = record.id || Math.random().toString(36).slice(2, 11);
+    const payload: CGPARecord = {
+      ...record,
+      id,
+      userId,
+      createdAt: record.createdAt || now,
+      updatedAt: now,
+    };
+
+    if (!isFirebaseReady()) {
+      const key = cgpaStorageKey(userId);
+      const current = JSON.parse(localStorage.getItem(key) || '[]') as CGPARecord[];
+      localStorage.setItem(key, JSON.stringify(current.filter((item) => item.id !== id).concat(payload)));
+      return;
+    }
+
+    await setDoc(doc(db, 'users', userId, 'cgpaRecords', id), payload);
+  },
+
+  deleteCgpaRecord: async (userId: string, recordId: string) => {
+    if (!userId || !recordId) return;
+    if (!isFirebaseReady()) {
+      const key = cgpaStorageKey(userId);
+      const current = JSON.parse(localStorage.getItem(key) || '[]') as CGPARecord[];
+      localStorage.setItem(key, JSON.stringify(current.filter((item) => item.id !== recordId)));
+      return;
+    }
+
+    await deleteDoc(doc(db, 'users', userId, 'cgpaRecords', recordId));
   },
 
   getCoursePrices: async (): Promise<Record<string, number>> => {
