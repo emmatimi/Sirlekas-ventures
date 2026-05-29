@@ -933,65 +933,65 @@ const topWalletUsers = useMemo(
       )}
 
       {activeTab === 'blog' && (
-        <div className="space-y-8 animate-in fade-in duration-500">
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 soft-shadow p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="bg-white rounded-[1.5rem] border border-slate-100 soft-shadow p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Content Desk</p>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Blog Articles</h2>
-              <p className="text-sm text-slate-500 mt-2">Publish student news, study guides, and academic updates.</p>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">Blog Articles</h2>
+              <p className="text-xs text-slate-500 mt-1">Publish student news, study guides, and academic updates.</p>
             </div>
             <button
               onClick={() => setEditingBlogPost({ title: '', excerpt: '', content: '', category: 'News', tags: [], faqs: [], author: 'Sirlekas Ventures', status: 'draft', featured: false, trending: false, viewCount: 0 })}
-              className="px-6 py-4 rounded-2xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-100"
+              className="px-5 py-3 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-100"
             >
               <i className="fas fa-plus mr-2"></i>
               New Article
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {blogPosts.length > 0 ? blogPosts.map((post) => (
-              <article key={post.id} className="bg-white rounded-[2.5rem] border border-slate-100 soft-shadow overflow-hidden">
+              <article key={post.id} className="bg-white rounded-[1.25rem] border border-slate-100 shadow-sm hover:shadow-md transition overflow-hidden">
                 {post.coverImage && (
-                  <img src={post.coverImage} alt="" className="w-full aspect-[16/6] object-cover" />
+                  <img src={post.coverImage} alt="" className="w-full aspect-[16/7] object-cover" />
                 )}
-                <div className="p-8">
-                  <div className="flex items-center justify-between gap-4 mb-5">
-                    <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest">
+                <div className="p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-[8px] font-black uppercase tracking-widest">
                       {post.category || 'News'}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                    <span className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
                       post.status === 'published' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
                     }`}>
                       {post.status}
                     </span>
                   </div>
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-3">{post.title}</h3>
-                  <p className="text-sm text-slate-500 leading-relaxed mb-6">{post.excerpt || 'No excerpt added yet.'}</p>
+                  <h3 className="text-base font-black text-slate-900 tracking-tight leading-tight mb-2 line-clamp-2">{post.title}</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed mb-4 line-clamp-3">{post.excerpt || 'No excerpt added yet.'}</p>
                   {post.tags && post.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-6">
-                      {post.tags.slice(0, 5).map((tag) => (
-                        <span key={tag} className="px-2.5 py-1 rounded-full bg-slate-50 text-slate-500 border border-slate-100 text-[9px] font-black uppercase tracking-widest">
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {post.tags.slice(0, 3).map((tag) => (
+                        <span key={tag} className="px-2 py-1 rounded-full bg-slate-50 text-slate-500 border border-slate-100 text-[8px] font-black uppercase tracking-widest">
                           {tag}
                         </span>
                       ))}
                     </div>
                   )}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-5 border-t border-slate-100">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
                       {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : 'Not published'}
                     </p>
                     <div className="flex gap-2">
-                      <button onClick={() => setEditingBlogPost(post)} className="px-4 py-2 rounded-xl bg-blue-50 text-blue-600 font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition">Edit</button>
-                      <button onClick={() => handleDeleteBlogPost(post.id)} className="px-4 py-2 rounded-xl bg-red-50 text-red-500 font-black text-[10px] uppercase tracking-widest hover:bg-red-600 hover:text-white transition">Delete</button>
+                      <button onClick={() => setEditingBlogPost(post)} className="px-3 py-2 rounded-lg bg-blue-50 text-blue-600 font-black text-[9px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition">Edit</button>
+                      <button onClick={() => handleDeleteBlogPost(post.id)} className="px-3 py-2 rounded-lg bg-red-50 text-red-500 font-black text-[9px] uppercase tracking-widest hover:bg-red-600 hover:text-white transition">Delete</button>
                     </div>
                   </div>
                 </div>
               </article>
             )) : (
-              <div className="lg:col-span-2 py-24 text-center bg-white rounded-[3rem] border border-slate-100 border-dashed">
-                <i className="fas fa-newspaper text-slate-100 text-7xl mb-6"></i>
-                <p className="text-slate-400 font-bold text-lg">No articles have been created yet.</p>
+              <div className="sm:col-span-2 xl:col-span-3 py-16 text-center bg-white rounded-[2rem] border border-slate-100 border-dashed">
+                <i className="fas fa-newspaper text-slate-100 text-5xl mb-5"></i>
+                <p className="text-slate-400 font-bold">No articles have been created yet.</p>
               </div>
             )}
           </div>

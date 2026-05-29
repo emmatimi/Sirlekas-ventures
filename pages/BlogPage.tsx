@@ -19,17 +19,17 @@ const renderArticleContent = (content: string) => {
 
   return blocks.map((block, index) => {
     if (block.startsWith('### ')) {
-      return <h3 key={index} className="text-2xl font-black text-slate-900 tracking-tight pt-4">{block.replace(/^### /, '')}</h3>;
+      return <h3 key={index} className="text-xl font-black text-slate-900 tracking-tight pt-3">{block.replace(/^### /, '')}</h3>;
     }
     if (block.startsWith('## ')) {
-      return <h2 key={index} className="text-3xl font-black text-slate-900 tracking-tight pt-6">{block.replace(/^## /, '')}</h2>;
+      return <h2 key={index} className="text-2xl font-black text-slate-900 tracking-tight pt-5">{block.replace(/^## /, '')}</h2>;
     }
     if (block.includes('\n- ')) {
       const [intro, ...items] = block.split('\n');
       return (
-        <div key={index} className="space-y-4">
+        <div key={index} className="space-y-3">
           {intro && <p>{intro.replace(/^- /, '')}</p>}
-          <ul className="space-y-3 pl-5">
+          <ul className="space-y-2 pl-5">
             {items.map((item, itemIndex) => (
               <li key={itemIndex} className="list-disc marker:text-blue-600">{item.replace(/^- /, '')}</li>
             ))}
@@ -157,15 +157,15 @@ const BlogPage: React.FC = () => {
     }
 
     return (
-      <div className="max-w-[1440px] mx-auto px-4 lg:px-12 py-14 animate-in fade-in duration-500">
-        <Link to="/blog" className="inline-flex items-center gap-3 text-blue-600 font-black text-xs uppercase tracking-widest mb-10">
+      <div className="max-w-[1280px] mx-auto px-4 lg:px-8 py-10 animate-in fade-in duration-500">
+        <Link to="/blog" className="inline-flex items-center gap-3 text-blue-600 font-black text-[11px] uppercase tracking-widest mb-7">
           <i className="fas fa-arrow-left"></i>
           Back to articles
         </Link>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-10">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-8">
           <article>
-            <header className="mb-10">
+            <header className="mb-7">
               <div className="flex flex-wrap items-center gap-3 mb-5">
                 <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-widest">
                   {activePost.category}
@@ -174,21 +174,21 @@ const BlogPage: React.FC = () => {
                   by {activePost.author} . {formatDate(activePost.publishedAt || activePost.createdAt)} . {activePost.readTime || 1} min read . {(activePost.viewCount || 0).toLocaleString()} views
                 </span>
               </div>
-              <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tight leading-[0.95] max-w-4xl">
+              <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl">
                 {activePost.title}
               </h1>
-              <p className="text-lg text-slate-500 leading-relaxed mt-6 max-w-3xl">{activePost.excerpt}</p>
+              <p className="text-base text-slate-500 leading-relaxed mt-4 max-w-3xl">{activePost.excerpt}</p>
             </header>
 
             {activePost.coverImage && (
               <img
                 src={activePost.coverImage}
                 alt=""
-                className="w-full aspect-[16/7] object-cover rounded-[2rem] mb-10 border border-slate-100"
+                className="w-full aspect-[16/6] object-cover rounded-[1.5rem] mb-7 border border-slate-100"
               />
             )}
 
-            <div className="flex flex-wrap gap-2 mb-10">
+            <div className="flex flex-wrap gap-2 mb-7">
               {activePost.tags?.map((tag) => (
                 <Link key={tag} to="/blog" className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest">
                   #{tag}
@@ -196,16 +196,16 @@ const BlogPage: React.FC = () => {
               ))}
             </div>
 
-            <div className="max-w-3xl text-slate-700 text-lg leading-9 space-y-7">
+            <div className="max-w-3xl text-slate-700 text-base leading-8 space-y-6">
               {renderArticleContent(activePost.content)}
             </div>
 
             {activePost.faqs && activePost.faqs.length > 0 && (
-              <section className="max-w-3xl mt-14 bg-slate-50 rounded-[2rem] p-7 border border-slate-100">
+              <section className="max-w-3xl mt-10 bg-slate-50 rounded-[1.5rem] p-5 border border-slate-100">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-4">Frequently Asked Questions</p>
                 <div className="space-y-4">
                   {activePost.faqs.map((faq, index) => (
-                    <details key={index} className="bg-white rounded-2xl p-5 border border-slate-100 group">
+                    <details key={index} className="bg-white rounded-2xl p-4 border border-slate-100 group">
                       <summary className="cursor-pointer font-black text-slate-900">{faq.question}</summary>
                       <p className="text-sm text-slate-500 leading-relaxed mt-4">{faq.answer}</p>
                     </details>
@@ -214,28 +214,14 @@ const BlogPage: React.FC = () => {
               </section>
             )}
 
-            <section className="max-w-3xl mt-12 p-7 rounded-[2rem] bg-blue-600 text-white flex flex-col md:flex-row md:items-center justify-between gap-5">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-100 mb-2">Stay Updated</p>
-                <h2 className="text-2xl font-black tracking-tight">Get student updates on WhatsApp</h2>
-              </div>
-              <a href={WHATSAPP_COMMUNITY_URL} target="_blank" rel="noopener noreferrer" className="px-6 py-4 rounded-2xl bg-white text-blue-600 font-black text-xs uppercase tracking-widest text-center">
-                Join Now
-              </a>
-            </section>
-
-            <div className="max-w-3xl mt-10 flex flex-col sm:flex-row gap-4">
-              <button onClick={() => sharePost(activePost)} className="flex-1 px-6 py-4 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest">
+            <div className="max-w-3xl mt-8">
+              <button onClick={() => sharePost(activePost)} className="w-full px-6 py-4 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest">
                 <i className="fas fa-share-alt mr-2"></i>
                 Share Article
               </button>
-              <a href={`https://wa.me/?text=${encodeURIComponent(`${activePost.title} ${getPostUrl(activePost)}`)}`} target="_blank" rel="noopener noreferrer" className="flex-1 px-6 py-4 rounded-2xl bg-emerald-50 text-emerald-700 font-black text-xs uppercase tracking-widest text-center">
-                <i className="fab fa-whatsapp mr-2"></i>
-                Share on WhatsApp
-              </a>
             </div>
 
-            <nav className="max-w-3xl mt-10 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <nav className="max-w-3xl mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
               {previousPost && (
                 <Link to={`/blog/${previousPost.slug || previousPost.id}`} className="p-5 rounded-2xl bg-white border border-slate-100 soft-shadow">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Previous Post</p>
@@ -251,8 +237,8 @@ const BlogPage: React.FC = () => {
             </nav>
 
             {relatedPosts.length > 0 && (
-              <section className="mt-14">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-6">You may also like</h2>
+              <section className="mt-10">
+                <h2 className="text-xl font-black text-slate-900 tracking-tight mb-5">You may also like</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   {relatedPosts.map((post) => (
                     <PostCard key={post.id} post={post} compact />
@@ -272,18 +258,18 @@ const BlogPage: React.FC = () => {
   const restPosts = featuredPost ? filteredPosts.filter((post) => post.id !== featuredPost.id) : filteredPosts;
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 lg:px-12 py-16 animate-in fade-in duration-500">
-      <header className="mb-10 max-w-3xl">
+    <div className="max-w-[1280px] mx-auto px-4 lg:px-8 py-10 animate-in fade-in duration-500">
+      <header className="mb-8 max-w-3xl">
         <p className="text-blue-600 font-black uppercase tracking-[0.3em] text-[10px] mb-3">Student Reading Hub</p>
-        <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tight leading-none mb-5">News and Articles</h1>
-        <p className="text-slate-500 text-lg leading-relaxed">
+        <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight mb-3">News and Articles</h1>
+        <p className="text-slate-500 text-base leading-relaxed">
           Practical academic updates, CBT preparation notes, and study guidance for students using the Sirlekas portal.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-10">
-        <main className="space-y-8">
-          <div className="bg-white rounded-[2rem] border border-slate-100 soft-shadow p-4 md:p-5">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-8">
+        <main className="space-y-6">
+          <div className="bg-white rounded-[1.5rem] border border-slate-100 soft-shadow p-3 md:p-4">
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="relative flex-grow">
                 <i className="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-300"></i>
@@ -291,13 +277,13 @@ const BlogPage: React.FC = () => {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search admission, CGPA, CBT, school fees..."
-                  className="w-full pl-14 pr-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 outline-none font-bold text-sm focus:ring-4 focus:ring-blue-500/10"
+                  className="w-full pl-14 pr-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 outline-none font-bold text-sm focus:ring-4 focus:ring-blue-500/10"
                 />
               </div>
               <select
                 value={activeTag}
                 onChange={(e) => setActiveTag(e.target.value)}
-                className="px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 outline-none font-black text-sm text-slate-700"
+                className="px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 outline-none font-black text-sm text-slate-700"
               >
                 {allTags.map((tag) => <option key={tag}>{tag}</option>)}
               </select>
@@ -305,15 +291,15 @@ const BlogPage: React.FC = () => {
           </div>
 
           {trendingPosts.length > 0 && (
-            <section className="bg-slate-900 text-white rounded-[2rem] p-6 md:p-8">
-              <p className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-5">Trending News</p>
+            <section className="bg-slate-900 text-white rounded-[1.5rem] p-5 md:p-6">
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-4">Trending News</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {trendingPosts.map((post, index) => (
-                  <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex items-center gap-4 rounded-2xl bg-white/5 border border-white/10 p-4 hover:bg-white/10 transition">
-                    <span className="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center font-black text-sm">{index + 1}</span>
+                  <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition">
+                    <span className="w-9 h-9 rounded-xl bg-blue-500 text-white flex items-center justify-center font-black text-xs">{index + 1}</span>
                     <div>
                       <p className="text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">{post.category}</p>
-                      <h2 className="font-black leading-tight">{post.title}</h2>
+                      <h2 className="font-black leading-tight text-sm">{post.title}</h2>
                     </div>
                   </Link>
                 ))}
@@ -324,12 +310,12 @@ const BlogPage: React.FC = () => {
           {featuredPost && <FeaturedPost post={featuredPost} />}
 
           {restPosts.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {restPosts.map((post) => <PostCard key={post.id} post={post} />)}
             </div>
           ) : (
-            <div className="py-24 text-center bg-slate-50 rounded-[3rem] border border-slate-100">
-              <i className="fas fa-newspaper text-slate-200 text-6xl mb-6"></i>
+            <div className="py-16 text-center bg-slate-50 rounded-[2rem] border border-slate-100">
+              <i className="fas fa-newspaper text-slate-200 text-5xl mb-5"></i>
               <p className="text-slate-500 font-bold">No articles match your current search.</p>
             </div>
           )}
@@ -342,14 +328,14 @@ const BlogPage: React.FC = () => {
 };
 
 const FeaturedPost: React.FC<{ post: BlogPost }> = ({ post }) => (
-  <Link to={`/blog/${post.slug || post.id}`} className="block bg-white border border-slate-100 rounded-[2rem] overflow-hidden soft-shadow group">
+  <Link to={`/blog/${post.slug || post.id}`} className="block bg-white border border-slate-100 rounded-[1.25rem] overflow-hidden shadow-sm hover:shadow-md transition group">
     <div className="grid grid-cols-1 lg:grid-cols-2">
-      {post.coverImage && <img src={post.coverImage} alt="" className="w-full h-full min-h-[280px] object-cover group-hover:scale-[1.03] transition-transform duration-500" />}
-      <div className="p-8 md:p-10 flex flex-col justify-center">
-        <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-4">Featured Article</p>
-        <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight mb-5">{post.title}</h2>
-        <p className="text-slate-500 leading-relaxed mb-6">{post.excerpt}</p>
-        <div className="flex flex-wrap items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+      {post.coverImage && <img src={post.coverImage} alt="" className="w-full h-full min-h-[135px] max-h-[190px] object-cover group-hover:scale-[1.03] transition-transform duration-500" />}
+      <div className="p-4 md:p-5 flex flex-col justify-center">
+        <p className="text-[8px] font-black uppercase tracking-widest text-blue-600 mb-2">Featured Article</p>
+        <h2 className="text-lg md:text-xl font-black text-slate-900 tracking-tight leading-tight mb-2 line-clamp-2">{post.title}</h2>
+        <p className="text-xs text-slate-500 leading-relaxed mb-3 line-clamp-2">{post.excerpt}</p>
+        <div className="flex flex-wrap items-center gap-2 text-[8px] font-black uppercase tracking-widest text-slate-400">
           <span>{post.category}</span>
           <span>{formatDate(post.publishedAt || post.createdAt)}</span>
           <span>{post.readTime || 1} min read</span>
@@ -362,23 +348,23 @@ const FeaturedPost: React.FC<{ post: BlogPost }> = ({ post }) => (
 const PostCard: React.FC<{ post: BlogPost; compact?: boolean }> = ({ post, compact = false }) => (
   <Link
     to={`/blog/${post.slug || post.id}`}
-    className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden soft-shadow group hover:-translate-y-1 transition-all duration-300"
+    className="bg-white border border-slate-100 rounded-[1.25rem] overflow-hidden shadow-sm group hover:-translate-y-0.5 hover:shadow-md transition-all duration-300"
   >
     {post.coverImage && (
-      <img src={post.coverImage} alt="" className={`w-full object-cover group-hover:scale-[1.03] transition-transform duration-500 ${compact ? 'aspect-[16/9]' : 'aspect-[16/10]'}`} />
+      <img src={post.coverImage} alt="" className={`w-full object-cover group-hover:scale-[1.03] transition-transform duration-500 ${compact ? 'aspect-[16/8]' : 'aspect-[16/8]'}`} />
     )}
-    <div className={compact ? 'p-5' : 'p-7'}>
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest">
+    <div className={compact ? 'p-3.5' : 'p-4'}>
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-[8px] font-black uppercase tracking-widest">
           {post.category}
         </span>
-        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
           {post.readTime || 1} min
         </span>
       </div>
-      <h2 className={`${compact ? 'text-lg' : 'text-2xl'} font-black text-slate-900 tracking-tight leading-tight mb-3`}>{post.title}</h2>
-      {!compact && <p className="text-sm text-slate-500 leading-relaxed mb-6">{post.excerpt}</p>}
-      <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">
+      <h2 className={`${compact ? 'text-sm' : 'text-base'} font-black text-slate-900 tracking-tight leading-tight mb-2.5 line-clamp-2`}>{post.title}</h2>
+      {!compact && <p className="text-xs text-slate-500 leading-relaxed mb-4 line-clamp-3">{post.excerpt}</p>}
+      <span className="text-[9px] font-black uppercase tracking-widest text-blue-600">
         Read article <i className="fas fa-arrow-right ml-2"></i>
       </span>
     </div>
@@ -386,17 +372,17 @@ const PostCard: React.FC<{ post: BlogPost; compact?: boolean }> = ({ post, compa
 );
 
 const BlogSidebar: React.FC<{ popularPosts: BlogPost[]; tags: string[] }> = ({ popularPosts, tags }) => (
-  <aside className="space-y-6">
-    <section className="bg-white rounded-[2rem] border border-slate-100 soft-shadow p-7">
-      <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-5">Popular Posts</p>
-      <div className="space-y-5">
+  <aside className="space-y-5">
+    <section className="bg-white rounded-[1.5rem] border border-slate-100 soft-shadow p-5">
+      <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-4">Popular Posts</p>
+      <div className="space-y-4">
         {popularPosts.map((post, index) => (
           <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex gap-4 group">
             <span className="w-9 h-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center font-black text-xs group-hover:bg-blue-600 group-hover:text-white transition">
               {index + 1}
             </span>
             <div>
-              <p className="font-black text-slate-900 leading-tight group-hover:text-blue-600 transition">{post.title}</p>
+              <p className="font-black text-sm text-slate-900 leading-tight group-hover:text-blue-600 transition">{post.title}</p>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">{(post.viewCount || 0).toLocaleString()} views</p>
             </div>
           </Link>
@@ -404,8 +390,8 @@ const BlogSidebar: React.FC<{ popularPosts: BlogPost[]; tags: string[] }> = ({ p
       </div>
     </section>
 
-    <section className="bg-white rounded-[2rem] border border-slate-100 soft-shadow p-7">
-      <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-5">Main Tags</p>
+    <section className="bg-white rounded-[1.5rem] border border-slate-100 soft-shadow p-5">
+      <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-4">Main Tags</p>
       <div className="flex flex-wrap gap-2">
         {tags.slice(0, 24).map((tag) => (
           <span key={tag} className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest">
@@ -415,9 +401,9 @@ const BlogSidebar: React.FC<{ popularPosts: BlogPost[]; tags: string[] }> = ({ p
       </div>
     </section>
 
-    <section className="bg-blue-600 rounded-[2rem] p-7 text-white">
+    <section className="bg-blue-600 rounded-[1.5rem] p-5 text-white">
       <p className="text-[10px] font-black uppercase tracking-widest text-blue-100 mb-3">Join Community</p>
-      <h2 className="text-2xl font-black tracking-tight mb-4">Get updates faster on WhatsApp</h2>
+      <h2 className="text-xl font-black tracking-tight mb-4">Get updates faster on WhatsApp</h2>
       <a href={WHATSAPP_COMMUNITY_URL} target="_blank" rel="noopener noreferrer" className="inline-flex px-5 py-3 rounded-2xl bg-white text-blue-600 font-black text-xs uppercase tracking-widest">
         Join Now
       </a>

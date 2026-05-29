@@ -10,6 +10,7 @@ import CBTTest from './pages/CBTTest.tsx';
 import AdminDashboard from './pages/AdminDashboard.tsx';
 import CGPACalculator from './pages/CGPACalculator.tsx';
 import BlogPage from './pages/BlogPage.tsx';
+import EKSUScreeningCalculator from './pages/EKSUScreeningCalculator.tsx';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './services/firebase.ts';
 import { getRoleForEmail } from './services/roles.ts';
@@ -58,6 +59,9 @@ const SEOMetadata = () => {
     } else if (pathname.includes('/cgpa-calculator')) {
       title = 'Accurate EKSU CGPA Calculator | Sirlekas Digital Hub';
       description = 'Calculate your Semester GPA and Cumulative CGPA with our professional 5.0 scale tool. Includes standard Nigerian university grade conversion charts.';
+    } else if (pathname.includes('/eksu-screening-calculator')) {
+      title = 'Post UTME Calc | EKSU Screening Aggregate Calculator | Sirlekas Ventures';
+      description = 'Use Post UTME Calc to estimate your EKSU screening aggregate score from your course, JAMB score, O Level sitting, subjects, and grades.';
     } else if (pathname.includes('/blog')) {
       title = 'Student News, Articles & Academic Updates | Sirlekas Ventures';
       description = 'Read student-focused news, EKSU updates, study guides, admission tips, CBT preparation notes, and academic articles from Sirlekas Ventures.';
@@ -266,6 +270,7 @@ const App: React.FC = () => {
     ...(user?.role === 'admin' ? [{ label: 'Admin', to: '/admin' }] : []),
     { label: 'Blog', to: '/blog' },
     { label: 'CGPA Calc', to: '/cgpa-calculator' },
+    { label: 'Post UTME Calc', to: '/eksu-screening-calculator' },
     { label: 'About', to: '/#about' },
   ];
 
@@ -460,6 +465,7 @@ const App: React.FC = () => {
                 <Route path="/blog" element={<BlogPage />} />
                 <Route path="/blog/:id" element={<BlogPage />} />
                 <Route path="/cgpa-calculator" element={<CGPACalculator user={user} />} />
+                <Route path="/eksu-screening-calculator" element={<EKSUScreeningCalculator />} />
               </Routes>
 
         )}
@@ -482,6 +488,7 @@ const App: React.FC = () => {
                 <li><button onClick={() => setActiveInfo(footerContents.help)} className="hover:text-blue-600 transition-colors">Help Center</button></li>
                 <li><button onClick={() => setActiveInfo(footerContents.guide)} className="hover:text-blue-600 transition-colors">CBT User Guide</button></li>
                 <li><Link to="/cgpa-calculator" className="hover:text-blue-600 transition-colors">CGPA Calculator</Link></li>
+                <li><Link to="/eksu-screening-calculator" className="hover:text-blue-600 transition-colors">Post UTME Calc</Link></li>
                 <li><a href="https://wa.me/2347073992036" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Contact Support</a></li>
               </ul>
             </div>
