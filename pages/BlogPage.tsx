@@ -255,51 +255,56 @@ const BlogPage: React.FC = () => {
   }
 
   const featuredPost = filteredPosts.find((post) => post.featured) || filteredPosts[0];
-  const restPosts = featuredPost ? filteredPosts.filter((post) => post.id !== featuredPost.id) : filteredPosts;
+  const readMorePosts = filteredPosts.filter(
+    (post) => post.id !== featuredPost?.id
+  );
+  const visibleTrendingPosts = (trendingPosts.length > 0 ? trendingPosts : popularPosts).slice(0, 6);
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 lg:px-8 py-10 animate-in fade-in duration-500">
-      <header className="mb-8 max-w-3xl">
-        <p className="text-blue-600 font-black uppercase tracking-[0.3em] text-[10px] mb-3">Student Reading Hub</p>
-        <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight mb-3">News and Articles</h1>
-        <p className="text-slate-500 text-base leading-relaxed">
-          Practical academic updates, CBT preparation notes, and study guidance for students using the Sirlekas portal.
-        </p>
+    <div className="max-w-[1180px] mx-auto px-4 lg:px-6 py-8 animate-in fade-in duration-500">
+      <header className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-end border-b border-slate-100 pb-6 mb-6">
+        <div>
+          <p className="text-blue-600 font-black uppercase tracking-[0.3em] text-[9px] mb-2">Sirlekas Student Blog</p>
+          <h1 className="text-3xl md:text-4xl font-black text-slate-950 tracking-tight leading-tight">News and Articles</h1>
+          <p className="text-slate-500 text-sm mt-2 max-w-2xl">
+            EKSU updates, admission guides, CBT notes, and student-friendly academic information.
+          </p>
+        </div>
+        <div className="relative">
+          <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"></i>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search this blog..."
+            className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-100 outline-none font-bold text-sm focus:ring-4 focus:ring-blue-500/10"
+          />
+        </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-8">
-        <main className="space-y-6">
-          <div className="bg-white rounded-[1.5rem] border border-slate-100 soft-shadow p-3 md:p-4">
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="relative flex-grow">
-                <i className="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-300"></i>
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search admission, CGPA, CBT, school fees..."
-                  className="w-full pl-14 pr-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 outline-none font-bold text-sm focus:ring-4 focus:ring-blue-500/10"
-                />
-              </div>
-              <select
-                value={activeTag}
-                onChange={(e) => setActiveTag(e.target.value)}
-                className="px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 outline-none font-black text-sm text-slate-700"
-              >
-                {allTags.map((tag) => <option key={tag}>{tag}</option>)}
-              </select>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-8">
+        <main className="space-y-8">
+          {featuredPost ? (
+            <section>
+              <SectionTitle title="Latest Updates" />
+              <LatestUpdateCard post={featuredPost} />
+            </section>
+          ) : (
+            <div className="py-16 text-center bg-slate-50 rounded-2xl border border-slate-100">
+              <i className="fas fa-newspaper text-slate-200 text-5xl mb-5"></i>
+              <p className="text-slate-500 font-bold">No articles match your current search.</p>
             </div>
-          </div>
+          )}
 
-          {trendingPosts.length > 0 && (
-            <section className="bg-slate-900 text-white rounded-[1.5rem] p-5 md:p-6">
-              <p className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-4">Trending News</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {trendingPosts.map((post, index) => (
-                  <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition">
-                    <span className="w-9 h-9 rounded-xl bg-blue-500 text-white flex items-center justify-center font-black text-xs">{index + 1}</span>
-                    <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">{post.category}</p>
-                      <h2 className="font-black leading-tight text-sm">{post.title}</h2>
+          {visibleTrendingPosts.length > 0 && (
+            <section>
+              <SectionTitle title="Trending News" action="Updated daily" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {visibleTrendingPosts.map((post, index) => (
+                  <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex items-start gap-3 border-b border-slate-100 pb-3 hover:text-blue-600 transition">
+                    <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black text-xs flex-shrink-0">{index + 1}</span>
+                    <div className="min-w-0">
+                      <h3 className="font-black leading-tight text-sm text-slate-900 group-hover:text-blue-600 line-clamp-2">{post.title}</h3>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-1">{post.category}</p>
                     </div>
                   </Link>
                 ))}
@@ -307,25 +312,90 @@ const BlogPage: React.FC = () => {
             </section>
           )}
 
-          {featuredPost && <FeaturedPost post={featuredPost} />}
-
-          {restPosts.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {restPosts.map((post) => <PostCard key={post.id} post={post} />)}
+          <section>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <SectionTitle title="Read More" />
+              <select
+                value={activeTag}
+                onChange={(e) => setActiveTag(e.target.value)}
+                className="px-4 py-2.5 rounded-xl bg-white border border-slate-100 outline-none font-black text-xs text-slate-700 shadow-sm"
+              >
+                {allTags.map((tag) => <option key={tag}>{tag}</option>)}
+              </select>
             </div>
-          ) : (
-            <div className="py-16 text-center bg-slate-50 rounded-[2rem] border border-slate-100">
-              <i className="fas fa-newspaper text-slate-200 text-5xl mb-5"></i>
-              <p className="text-slate-500 font-bold">No articles match your current search.</p>
-            </div>
-          )}
+            {readMorePosts.length > 0 ? (
+              <div className="space-y-4">
+                {readMorePosts.map((post) => (
+                  <ReadMoreItem key={post.id} post={post} />
+                ))}
+              </div>
+            ) : (
+              <div className="py-10 text-center bg-slate-50 rounded-[1.5rem] border border-slate-100">
+                <p className="text-slate-500 font-bold">No more articles match this view.</p>
+              </div>
+            )}
+          </section>
         </main>
 
-        <BlogSidebar popularPosts={popularPosts} tags={allTags.filter((tag) => tag !== 'All')} />
+        <BlogSidebar
+          popularPosts={popularPosts}
+          tags={allTags.filter((tag) => tag !== 'All')}
+          activeTag={activeTag}
+          onTagSelect={setActiveTag}
+        />
       </div>
     </div>
   );
 };
+
+const SectionTitle: React.FC<{ title: string; action?: string }> = ({ title, action }) => (
+  <div className="flex items-center justify-between gap-4 mb-4">
+    <div className="flex items-center gap-3">
+      <span className="w-1.5 h-5 rounded-full bg-blue-600"></span>
+      <h2 className="text-lg font-black text-slate-950 tracking-tight">{title}</h2>
+    </div>
+    {action && <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{action}</span>}
+  </div>
+);
+
+const LatestUpdateCard: React.FC<{ post: BlogPost }> = ({ post }) => (
+  <Link to={`/blog/${post.slug || post.id}`} className="block group border-b border-slate-100 pb-6">
+    {post.coverImage && (
+      <img src={post.coverImage} alt="" className="w-full aspect-[16/8] object-cover rounded-2xl border border-slate-100 group-hover:brightness-95 transition" />
+    )}
+    <div className="pt-4">
+      <p className="text-[9px] font-black uppercase tracking-widest text-blue-600 mb-2">{post.category}</p>
+      <h2 className="text-2xl md:text-4xl font-black text-slate-950 tracking-tight leading-tight group-hover:text-blue-600 transition">{post.title}</h2>
+      <p className="text-sm text-slate-500 mt-3 line-clamp-3 max-w-3xl">{post.excerpt}</p>
+      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-4">
+        by {post.author} . {formatDate(post.publishedAt || post.createdAt)}
+      </p>
+    </div>
+  </Link>
+);
+
+const ReadMoreItem: React.FC<{ post: BlogPost }> = ({ post }) => (
+  <Link to={`/blog/${post.slug || post.id}`} className="grid grid-cols-[112px_1fr] md:grid-cols-[150px_1fr] gap-4 border-b border-slate-100 pb-4 group">
+    {post.coverImage && (
+      <img src={post.coverImage} alt="" className="w-full h-full min-h-[96px] object-cover rounded-xl border border-slate-100" />
+    )}
+    <div className="py-1 min-w-0">
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-[8px] font-black uppercase tracking-widest">
+          {post.category}
+        </span>
+        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+          {formatDate(post.publishedAt || post.createdAt)}
+        </span>
+      </div>
+      <h2 className="text-base md:text-lg font-black text-slate-950 tracking-tight leading-tight line-clamp-2 group-hover:text-blue-600 transition">{post.title}</h2>
+      <p className="text-xs text-slate-500 leading-relaxed mt-2 line-clamp-2">{post.excerpt}</p>
+      <span className="inline-flex mt-3 text-[9px] font-black uppercase tracking-widest text-blue-600">
+        Read more <i className="fas fa-arrow-right ml-2"></i>
+      </span>
+    </div>
+  </Link>
+);
 
 const FeaturedPost: React.FC<{ post: BlogPost }> = ({ post }) => (
   <Link to={`/blog/${post.slug || post.id}`} className="block bg-white border border-slate-100 rounded-[1.25rem] overflow-hidden shadow-sm hover:shadow-md transition group">
@@ -371,14 +441,19 @@ const PostCard: React.FC<{ post: BlogPost; compact?: boolean }> = ({ post, compa
   </Link>
 );
 
-const BlogSidebar: React.FC<{ popularPosts: BlogPost[]; tags: string[] }> = ({ popularPosts, tags }) => (
-  <aside className="space-y-5">
-    <section className="bg-white rounded-[1.5rem] border border-slate-100 soft-shadow p-5">
+const BlogSidebar: React.FC<{
+  popularPosts: BlogPost[];
+  tags: string[];
+  activeTag?: string;
+  onTagSelect?: (tag: string) => void;
+}> = ({ popularPosts, tags, activeTag = 'All', onTagSelect }) => (
+  <aside className="space-y-7">
+    <section>
       <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-4">Popular Posts</p>
-      <div className="space-y-4">
+      <div className="space-y-3">
         {popularPosts.map((post, index) => (
-          <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex gap-4 group">
-            <span className="w-9 h-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center font-black text-xs group-hover:bg-blue-600 group-hover:text-white transition">
+          <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex gap-3 border-b border-slate-100 pb-3 group">
+            <span className="w-7 h-7 rounded-lg bg-slate-50 text-slate-400 flex items-center justify-center font-black text-xs group-hover:bg-blue-600 group-hover:text-white transition flex-shrink-0">
               {index + 1}
             </span>
             <div>
@@ -390,18 +465,36 @@ const BlogSidebar: React.FC<{ popularPosts: BlogPost[]; tags: string[] }> = ({ p
       </div>
     </section>
 
-    <section className="bg-white rounded-[1.5rem] border border-slate-100 soft-shadow p-5">
+    <section>
       <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-4">Main Tags</p>
       <div className="flex flex-wrap gap-2">
         {tags.slice(0, 24).map((tag) => (
-          <span key={tag} className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+          <button
+            key={tag}
+            type="button"
+            onClick={() => onTagSelect?.(tag)}
+            className={`px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition ${
+              activeTag === tag
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-slate-50 border-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-600'
+            }`}
+          >
             {tag}
-          </span>
+          </button>
         ))}
       </div>
+      {activeTag !== 'All' && onTagSelect && (
+        <button
+          type="button"
+          onClick={() => onTagSelect('All')}
+          className="mt-4 text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800"
+        >
+          Clear tag filter
+        </button>
+      )}
     </section>
 
-    <section className="bg-blue-600 rounded-[1.5rem] p-5 text-white">
+    <section className="bg-blue-600 rounded-2xl p-5 text-white">
       <p className="text-[10px] font-black uppercase tracking-widest text-blue-100 mb-3">Join Community</p>
       <h2 className="text-xl font-black tracking-tight mb-4">Get updates faster on WhatsApp</h2>
       <a href={WHATSAPP_COMMUNITY_URL} target="_blank" rel="noopener noreferrer" className="inline-flex px-5 py-3 rounded-2xl bg-white text-blue-600 font-black text-xs uppercase tracking-widest">
