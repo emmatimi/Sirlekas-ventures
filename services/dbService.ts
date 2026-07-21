@@ -17,6 +17,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { User, Question, ExamResult, InspirationalQuote, Transaction, BlogPost, CGPARecord } from '../types';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from './firebase';
 
 const FALLBACK_QUESTIONS: Question[] = [
   {
@@ -415,13 +417,16 @@ export const dbService = {
     }
 
     try {
-      const snap = await getDocs(collection(db, 'blogPosts'));
+      const source = includeDrafts
+        ? collection(db, 'blogPosts')
+        : query(collection(db, 'blogPosts'), where('status', '==', 'published'));
+      const snap = await getDocs(source);
       const posts = snap.docs.map((d) => normalizeBlogPost(d.id, d.data()));
 
       const visible = includeDrafts ? posts : posts.filter((post) => post.status === 'published');
       return visible.sort((a, b) => (b.publishedAt || b.createdAt || 0) - (a.publishedAt || a.createdAt || 0));
     } catch (err) {
-      console.error('getBlogPosts failed', err);
+      console.warn('getBlogPosts failed; showing built-in articles.', err);
       return FALLBACK_BLOG_POSTS.filter((post) => includeDrafts || post.status === 'published');
     }
   },
@@ -459,6 +464,23 @@ export const dbService = {
     }
 
     await setDoc(doc(db, 'blogPosts', id), payload);
+  },
+
+  uploadBlogImage: async (file: File): Promise<string> => {
+    if (!file.type.startsWith('image/')) throw new Error('Please choose a valid image file.');
+    if (file.size > 8 * 1024 * 1024) throw new Error('Images must be smaller than 8 MB.');
+    if (!isFirebaseReady()) {
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('Unable to read this image.'));
+        reader.readAsDataURL(file);
+      });
+    }
+    const extension = file.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg';
+    const path = `blog-images/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+    const snapshot = await uploadBytes(ref(storage, path), file, { contentType: file.type });
+    return getDownloadURL(snapshot.ref);
   },
 
   incrementBlogPostView: async (id: string) => {

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Question, ExamResult, InspirationalQuote, Transaction, User, BlogPost } from '../types';
 import { dbService } from '../services/dbService';
 import { auth } from '../services/firebase';
+import ArticleEditor from '../components/ArticleEditor';
 
 const EXAM_CATEGORIES = ['JAMB', 'General Studies (GST)'];
 
@@ -1131,20 +1132,23 @@ const topWalletUsers = useMemo(
       )}
 
       {editingBlogPost && (
-        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white max-w-4xl w-full rounded-[3rem] p-8 md:p-10 shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 z-[600] bg-slate-100 animate-in fade-in duration-300 overflow-y-auto custom-scrollbar">
+          <div className="bg-white min-h-screen w-full">
+            <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-5 md:px-10 py-4 flex justify-between items-center gap-6">
             <div className="flex justify-between items-start gap-6 mb-8">
               <div>
                 <p className="text-blue-600 text-[10px] font-black uppercase tracking-widest mb-2">Blog Editor</p>
                 <h3 className="text-3xl font-black text-slate-900 tracking-tight">{editingBlogPost.id ? 'Edit Article' : 'Create Article'}</h3>
               </div>
-              <button onClick={() => setEditingBlogPost(null)} className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 hover:text-red-500 transition-all">
+              <button onClick={() => setEditingBlogPost(null)} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-red-500 transition-all">
                 <i className="fas fa-times text-xl"></i>
               </button>
             </div>
+            </div>
 
-            <form onSubmit={handleSaveBlogPost} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <form onSubmit={handleSaveBlogPost} className="max-w-[1480px] mx-auto p-5 md:p-10 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-8">
+              <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 bg-white rounded-2xl border border-slate-200 p-6">
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Title</label>
                   <input
@@ -1182,15 +1186,6 @@ const topWalletUsers = useMemo(
                     onChange={(e) => setEditingBlogPost({ ...editingBlogPost, author: e.target.value })}
                     className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold text-slate-900"
                     placeholder="Sirlekas Ventures"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cover Image URL</label>
-                  <input
-                    value={editingBlogPost.coverImage || ''}
-                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, coverImage: e.target.value })}
-                    className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold text-slate-900"
-                    placeholder="https://..."
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
@@ -1238,15 +1233,29 @@ const topWalletUsers = useMemo(
                     placeholder="Short summary shown on the blog page"
                   />
                 </div>
-                <div className="md:col-span-2 space-y-2">
+                </div>
+                <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Article Body</label>
-                  <textarea
-                    required
-                    value={editingBlogPost.content || ''}
-                    onChange={(e) => setEditingBlogPost({ ...editingBlogPost, content: e.target.value })}
-                    className="w-full p-6 bg-slate-50 rounded-[2rem] outline-none border border-slate-100 font-medium text-slate-800 leading-relaxed min-h-[240px]"
-                    placeholder="Use blank lines between paragraphs."
-                  />
+                  <ArticleEditor value={editingBlogPost.content || ''} onChange={(content) => setEditingBlogPost((current) => ({ ...current, content }))} />
+                </div>
+              </div>
+              <aside className="space-y-5 xl:sticky xl:top-28 xl:self-start">
+                <div className="space-y-2 bg-white rounded-2xl border border-slate-200 p-5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Display picture</label>
+                  <label
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) setEditingBlogPost({ ...editingBlogPost, coverImage: await dbService.uploadBlogImage(file) });
+                    }}
+                    className="block rounded-xl border-2 border-dashed border-slate-200 p-5 text-center cursor-pointer hover:border-blue-400"
+                  >
+                    {editingBlogPost.coverImage ? <img src={editingBlogPost.coverImage} alt="Cover preview" className="w-full aspect-video object-cover rounded-lg mb-3" /> : <i className="fas fa-cloud-upload-alt text-3xl text-blue-500 mb-2" />}
+                    <span className="block text-xs font-bold text-slate-600">Drop or choose cover image</span>
+                    <input type="file" accept="image/*" hidden onChange={async (e) => { const file = e.target.files?.[0]; if (file) setEditingBlogPost({ ...editingBlogPost, coverImage: await dbService.uploadBlogImage(file) }); }} />
+                  </label>
+                  <input value={editingBlogPost.coverImage || ''} onChange={(e) => setEditingBlogPost({ ...editingBlogPost, coverImage: e.target.value })} className="w-full p-3 bg-slate-50 rounded-xl text-xs outline-none border border-slate-100" placeholder="Or paste an image URL" />
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FAQ Blocks</label>
@@ -1258,7 +1267,6 @@ const topWalletUsers = useMemo(
                   />
                   <p className="text-xs text-slate-400 font-bold">Use one FAQ per line. Separate the question and answer with a vertical bar.</p>
                 </div>
-              </div>
               <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <button type="submit" className="flex-grow bg-blue-600 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-700 transition">
                   Save Article
@@ -1267,6 +1275,7 @@ const topWalletUsers = useMemo(
                   Cancel
                 </button>
               </div>
+              </aside>
             </form>
           </div>
         </div>

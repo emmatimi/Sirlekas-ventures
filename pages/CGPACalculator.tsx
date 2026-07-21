@@ -5,8 +5,12 @@ import { dbService } from '../services/dbService';
 
 const GRADE_POINTS: Record<string, number> = {
   A: 5,
+  'A-': 4,
+  'B+': 4.5,
   B: 4,
-  C: 3,
+  'B-': 3.5,
+  'C+': 3,
+  C: 2.5,
   D: 2,
   E: 1,
   F: 0,
@@ -153,7 +157,7 @@ const CGPACalculator: React.FC<{ user: User | null }> = ({ user }) => {
   };
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 lg:px-12 py-16 animate-in fade-in duration-500">
+    <div className="max-w-[1440px] mx-auto px-4 lg:px-12 py-8 animate-in fade-in duration-500">
       {message && (
         <div className="fixed top-24 right-4 z-[600] w-[min(420px,calc(100vw-2rem))] animate-in slide-in-from-right duration-300">
           <div className={`rounded-[2rem] border p-5 shadow-2xl bg-white flex items-start gap-4 ${message.type === 'success' ? 'border-emerald-100' : 'border-red-100'}`}>
@@ -170,16 +174,14 @@ const CGPACalculator: React.FC<{ user: User | null }> = ({ user }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-10">
+      <header className="mb-7 max-w-4xl">
+        <p className="text-blue-600 font-black uppercase tracking-[0.25em] text-[10px] mb-3">Academic Planner</p>
+        <h1 className="text-4xl md:text-6xl font-black text-slate-950 tracking-tight mb-4">CGPA Calculator</h1>
+        <p className="text-slate-500 text-base">Calculate your semester GPA, save it to your profile, and build your cumulative CGPA across sessions with ease.</p>
+      </header>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-10">
         <section className="space-y-8">
-          <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 soft-shadow">
-            <header className="mb-8">
-              <p className="text-blue-600 font-black uppercase tracking-[0.3em] text-[10px] mb-3">Academic Planner</p>
-              <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight mb-4">CGPA Calculator</h1>
-              <p className="text-slate-500 text-base max-w-2xl">
-                Calculate a semester GPA, save it to your profile, and keep building a cumulative CGPA record across sessions.
-              </p>
-            </header>
+          <div className="bg-white p-6 md:p-7 rounded-2xl border border-slate-200 shadow-sm">
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
               <div className="space-y-2">
@@ -234,7 +236,7 @@ const CGPACalculator: React.FC<{ user: User | null }> = ({ user }) => {
                     onChange={(e) => updateCourse(course.id, 'grade', e.target.value)}
                     className="col-span-6 md:col-span-3 w-full bg-white md:bg-transparent rounded-xl px-4 py-3 outline-none font-black text-blue-600 text-center"
                   >
-                    {Object.keys(GRADE_POINTS).map((grade) => <option key={grade} value={grade}>Grade {grade}</option>)}
+                    {Object.entries(GRADE_POINTS).map(([grade, point]) => <option key={grade} value={grade}>{grade} ({point.toFixed(1)})</option>)}
                   </select>
                   <button
                     onClick={() => removeCourse(course.id)}
@@ -247,18 +249,18 @@ const CGPACalculator: React.FC<{ user: User | null }> = ({ user }) => {
               ))}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 mt-8">
-              <button onClick={addCourse} className="flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-blue-50 text-blue-600 font-black text-xs uppercase tracking-widest hover:bg-blue-100 transition">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-8">
+              <button onClick={addCourse} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-50 text-blue-600 font-black text-[10px] uppercase tracking-widest hover:bg-blue-100 transition">
                 <i className="fas fa-plus"></i>
                 Add Course
               </button>
               <button
                 onClick={saveSemester}
                 disabled={saving}
-                className="flex-grow flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition disabled:bg-slate-300 disabled:cursor-not-allowed"
+                className="sm:ml-auto sm:min-w-[300px] flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition disabled:bg-slate-300 disabled:cursor-not-allowed"
               >
                 <i className="fas fa-save"></i>
-                {saving ? 'Saving...' : 'Save Semester Result'}
+                {saving ? 'Saving...' : 'Calculate & Save Semester Result'}
               </button>
             </div>
 
@@ -269,7 +271,7 @@ const CGPACalculator: React.FC<{ user: User | null }> = ({ user }) => {
             )}
           </div>
 
-          <div className="bg-slate-900 rounded-[2.5rem] p-8 md:p-10 text-white shadow-2xl shadow-blue-900/20">
+          <div className="bg-[#081630] rounded-2xl p-7 md:p-8 text-white shadow-xl shadow-blue-900/20">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
               <div>
                 <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mb-4">Current Semester GPA</p>
@@ -355,6 +357,17 @@ const CGPACalculator: React.FC<{ user: User | null }> = ({ user }) => {
                 </div>
               )}
             </div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h2 className="font-black text-slate-900 mb-4"><i className="far fa-star text-blue-600 mr-3" />Grade Scale (5.0)</h2>
+            <div className="grid grid-cols-5 gap-2">
+              {Object.entries(GRADE_POINTS).map(([grade, point]) => (
+                <div key={grade} className="rounded-xl border border-slate-100 bg-slate-50 py-3 text-center">
+                  <p className="font-black text-slate-900 text-sm">{grade}</p><p className="text-xs text-slate-500">{point.toFixed(1)}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500 mt-4">Note: F grades earn 0 points and remain part of attempted units.</p>
           </div>
         </aside>
       </div>

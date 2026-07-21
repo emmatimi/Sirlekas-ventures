@@ -14,7 +14,26 @@ const normalize = (value: string) => value.toLowerCase().trim();
 
 const getPostUrl = (post: BlogPost) => `${window.location.origin}/blog/${post.slug || post.id}`;
 
+const sanitizeArticleHtml = (html: string) => {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  parsed.querySelectorAll('script,style,iframe,object,embed,form,input,button').forEach((node) => node.remove());
+  parsed.body.querySelectorAll('*').forEach((element) => {
+    Array.from(element.attributes).forEach((attribute) => {
+      if (attribute.name.startsWith('on') || attribute.name === 'style') element.removeAttribute(attribute.name);
+      if (['href', 'src'].includes(attribute.name) && /^\s*(javascript|data:text\/html)/i.test(attribute.value)) element.removeAttribute(attribute.name);
+    });
+    if (element.tagName === 'A') {
+      element.setAttribute('rel', 'noopener noreferrer');
+      element.setAttribute('target', '_blank');
+    }
+  });
+  return parsed.body.innerHTML;
+};
+
 const renderArticleContent = (content: string) => {
+  if (/<(?:h[1-6]|p|ul|ol|blockquote|figure|img|strong|em|a)\b/i.test(content)) {
+    return <div className="published-article" dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(content) }} />;
+  }
   const blocks = content.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
 
   return blocks.map((block, index) => {
@@ -157,14 +176,14 @@ const BlogPage: React.FC = () => {
     }
 
     return (
-      <div className="max-w-[1280px] mx-auto px-4 lg:px-8 py-10 animate-in fade-in duration-500">
-        <Link to="/blog" className="inline-flex items-center gap-3 text-blue-600 font-black text-[11px] uppercase tracking-widest mb-7">
+      <div className="max-w-[1440px] mx-auto px-4 lg:px-10 py-5 animate-in fade-in duration-500">
+        <Link to="/blog" className="inline-flex items-center gap-3 text-blue-600 font-black text-[11px] uppercase tracking-widest mb-5">
           <i className="fas fa-arrow-left"></i>
           Back to articles
         </Link>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-8">
-          <article>
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_330px] gap-8 items-start">
+          <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 md:p-8 shadow-sm">
             <header className="mb-7">
               <div className="flex flex-wrap items-center gap-3 mb-5">
                 <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-widest">
@@ -181,11 +200,13 @@ const BlogPage: React.FC = () => {
             </header>
 
             {activePost.coverImage && (
-              <img
-                src={activePost.coverImage}
-                alt=""
-                className="w-full aspect-[16/6] object-cover rounded-[1.5rem] mb-7 border border-slate-100"
-              />
+              <div className="max-w-4xl mb-7">
+                <img
+                  src={activePost.coverImage}
+                  alt=""
+                  className="w-full max-h-[360px] object-cover rounded-2xl border border-slate-100"
+                />
+              </div>
             )}
 
             <div className="flex flex-wrap gap-2 mb-7">
@@ -196,12 +217,12 @@ const BlogPage: React.FC = () => {
               ))}
             </div>
 
-            <div className="max-w-3xl text-slate-700 text-base leading-8 space-y-6">
+            <div className="max-w-4xl text-slate-700 text-base leading-8 space-y-6">
               {renderArticleContent(activePost.content)}
             </div>
 
             {activePost.faqs && activePost.faqs.length > 0 && (
-              <section className="max-w-3xl mt-10 bg-slate-50 rounded-[1.5rem] p-5 border border-slate-100">
+              <section className="max-w-4xl mt-10 bg-slate-50 rounded-[1.5rem] p-5 border border-slate-100">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-4">Frequently Asked Questions</p>
                 <div className="space-y-4">
                   {activePost.faqs.map((faq, index) => (
@@ -214,14 +235,14 @@ const BlogPage: React.FC = () => {
               </section>
             )}
 
-            <div className="max-w-3xl mt-8">
+            <div className="max-w-4xl mt-8">
               <button onClick={() => sharePost(activePost)} className="w-full px-6 py-4 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest">
                 <i className="fas fa-share-alt mr-2"></i>
                 Share Article
               </button>
             </div>
 
-            <nav className="max-w-3xl mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <nav className="max-w-4xl mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
               {previousPost && (
                 <Link to={`/blog/${previousPost.slug || previousPost.id}`} className="p-5 rounded-2xl bg-white border border-slate-100 soft-shadow">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Previous Post</p>
@@ -248,46 +269,40 @@ const BlogPage: React.FC = () => {
             )}
           </article>
 
-          <BlogSidebar popularPosts={popularPosts} tags={allTags.filter((tag) => tag !== 'All')} />
+          <BlogSidebar posts={posts} />
         </div>
       </div>
     );
   }
 
   const featuredPost = filteredPosts.find((post) => post.featured) || filteredPosts[0];
-  const readMorePosts = filteredPosts.filter(
-    (post) => post.id !== featuredPost?.id
-  );
-  const visibleTrendingPosts = (trendingPosts.length > 0 ? trendingPosts : popularPosts).slice(0, 6);
+  const articlePosts = filteredPosts.slice(0, 8);
+  const visibleTrendingPosts = (trendingPosts.length > 0 ? trendingPosts : popularPosts).slice(0, 4);
+  const topicNames = ['CBT', 'JAMB', 'CGPA', 'Academics', 'Study Tips', 'Students'];
 
   return (
-    <div className="max-w-[1180px] mx-auto px-4 lg:px-6 py-8 animate-in fade-in duration-500">
-      <header className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-end border-b border-slate-100 pb-6 mb-6">
-        <div>
-          <p className="text-blue-600 font-black uppercase tracking-[0.3em] text-[9px] mb-2">Sirlekas Student Blog</p>
-          <h1 className="text-3xl md:text-4xl font-black text-slate-950 tracking-tight leading-tight">News and Articles</h1>
-          <p className="text-slate-500 text-sm mt-2 max-w-2xl">
-            EKSU updates, admission guides, CBT notes, and student-friendly academic information.
-          </p>
-        </div>
-        <div className="relative">
-          <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"></i>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search this blog..."
-            className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-100 outline-none font-bold text-sm focus:ring-4 focus:ring-blue-500/10"
-          />
-        </div>
-      </header>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-8">
-        <main className="space-y-8">
+    <div className="max-w-[1440px] mx-auto px-4 lg:px-10 py-5 animate-in fade-in duration-500">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_330px] gap-8 items-start">
+        <main className="space-y-4 min-w-0">
           {featuredPost ? (
-            <section>
-              <SectionTitle title="Latest Updates" />
-              <LatestUpdateCard post={featuredPost} />
-            </section>
+            <Link to={`/blog/${featuredPost.slug || featuredPost.id}`} className="group grid grid-cols-1 lg:grid-cols-[1.05fr_.95fr] min-h-[265px] overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-50 to-white shadow-sm">
+              <div className="p-7 lg:p-8 flex flex-col justify-center order-2 lg:order-1">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-blue-600">Featured</span>
+                  <span className="text-xs font-bold text-slate-500">{featuredPost.category}</span>
+                </div>
+                <h1 className="max-w-xl text-3xl lg:text-4xl font-black leading-[1.08] tracking-tight text-slate-950 group-hover:text-blue-600 transition">{featuredPost.title}</h1>
+                <p className="mt-3 max-w-lg text-sm leading-6 text-slate-500 line-clamp-2">{featuredPost.excerpt}</p>
+                <div className="mt-5 flex flex-wrap items-center gap-5 text-xs font-semibold text-slate-500">
+                  <span><i className="far fa-clock mr-2" />{featuredPost.readTime || 1} min read</span>
+                  <span><i className="far fa-eye mr-2" />{(featuredPost.viewCount || 0).toLocaleString()} views</span>
+                  <span className="rounded-lg bg-blue-600 px-5 py-3 font-bold text-white">Read article <i className="fas fa-arrow-right ml-2" /></span>
+                </div>
+              </div>
+              <div className="order-1 lg:order-2 min-h-[220px] overflow-hidden">
+                {featuredPost.coverImage ? <img src={featuredPost.coverImage} alt="" className="h-full w-full object-cover group-hover:scale-105 transition duration-700" /> : <div className="h-full bg-blue-100" />}
+              </div>
+            </Link>
           ) : (
             <div className="py-16 text-center bg-slate-50 rounded-2xl border border-slate-100">
               <i className="fas fa-newspaper text-slate-200 text-5xl mb-5"></i>
@@ -295,16 +310,26 @@ const BlogPage: React.FC = () => {
             </div>
           )}
 
+          <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+            <div className="relative flex-1">
+              <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search articles, topics or keywords..." className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" />
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {['All', ...topicNames].map((topic) => <button key={topic} onClick={() => setActiveTag(topic)} className={`whitespace-nowrap rounded-full px-4 py-2.5 text-xs font-bold transition ${activeTag === topic ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'bg-slate-100 text-slate-600 hover:bg-blue-50'}`}>{topic === 'All' ? 'All Topics' : topic}</button>)}
+            </div>
+          </div>
+
           {visibleTrendingPosts.length > 0 && (
-            <section>
-              <SectionTitle title="Trending News" action="Updated daily" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <section className="py-2">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-50 text-orange-500"><i className="fas fa-fire" /></span>Trending now</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0">
                 {visibleTrendingPosts.map((post, index) => (
-                  <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex items-start gap-3 border-b border-slate-100 pb-3 hover:text-blue-600 transition">
-                    <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black text-xs flex-shrink-0">{index + 1}</span>
+                  <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex items-start gap-3 px-3 py-2 lg:border-r lg:last:border-0 border-blue-100 hover:text-blue-600 transition">
+                    <span className="text-xl font-black text-blue-600">{String(index + 1).padStart(2, '0')}</span>
                     <div className="min-w-0">
-                      <h3 className="font-black leading-tight text-sm text-slate-900 group-hover:text-blue-600 line-clamp-2">{post.title}</h3>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-1">{post.category}</p>
+                      <h3 className="font-black leading-tight text-xs text-slate-900 line-clamp-2">{post.title}</h3>
+                      <p className="text-[10px] text-slate-500 mt-1">{(post.viewCount || 0).toLocaleString()} views</p>
                     </div>
                   </Link>
                 ))}
@@ -312,21 +337,11 @@ const BlogPage: React.FC = () => {
             </section>
           )}
 
-          <section>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <SectionTitle title="Read More" />
-              <select
-                value={activeTag}
-                onChange={(e) => setActiveTag(e.target.value)}
-                className="px-4 py-2.5 rounded-xl bg-white border border-slate-100 outline-none font-black text-xs text-slate-700 shadow-sm"
-              >
-                {allTags.map((tag) => <option key={tag}>{tag}</option>)}
-              </select>
-            </div>
-            {readMorePosts.length > 0 ? (
-              <div className="space-y-4">
-                {readMorePosts.map((post) => (
-                  <ReadMoreItem key={post.id} post={post} />
+          <section className="pb-3">
+            {articlePosts.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {articlePosts.map((post) => (
+                  <PostCard key={post.id} post={post} />
                 ))}
               </div>
             ) : (
@@ -334,15 +349,11 @@ const BlogPage: React.FC = () => {
                 <p className="text-slate-500 font-bold">No more articles match this view.</p>
               </div>
             )}
+            {articlePosts.length > 0 && <button className="mx-auto mt-4 flex items-center gap-3 rounded-lg border border-blue-200 px-6 py-3 text-xs font-black text-blue-600 hover:bg-blue-50">Load more articles <i className="fas fa-arrow-down" /></button>}
           </section>
         </main>
 
-        <BlogSidebar
-          popularPosts={popularPosts}
-          tags={allTags.filter((tag) => tag !== 'All')}
-          activeTag={activeTag}
-          onTagSelect={setActiveTag}
-        />
+        <BlogSidebar posts={posts} onTopicSelect={setActiveTag} />
       </div>
     </div>
   );
@@ -442,66 +453,71 @@ const PostCard: React.FC<{ post: BlogPost; compact?: boolean }> = ({ post, compa
 );
 
 const BlogSidebar: React.FC<{
-  popularPosts: BlogPost[];
-  tags: string[];
-  activeTag?: string;
-  onTagSelect?: (tag: string) => void;
-}> = ({ popularPosts, tags, activeTag = 'All', onTagSelect }) => (
-  <aside className="space-y-7">
-    <section>
-      <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-4">Popular Posts</p>
-      <div className="space-y-3">
-        {popularPosts.map((post, index) => (
-          <Link key={post.id} to={`/blog/${post.slug || post.id}`} className="flex gap-3 border-b border-slate-100 pb-3 group">
-            <span className="w-7 h-7 rounded-lg bg-slate-50 text-slate-400 flex items-center justify-center font-black text-xs group-hover:bg-blue-600 group-hover:text-white transition flex-shrink-0">
-              {index + 1}
-            </span>
-            <div>
-              <p className="font-black text-sm text-slate-900 leading-tight group-hover:text-blue-600 transition">{post.title}</p>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">{(post.viewCount || 0).toLocaleString()} views</p>
-            </div>
-          </Link>
-        ))}
+  posts: BlogPost[];
+  onTopicSelect?: (topic: string) => void;
+}> = ({ posts, onTopicSelect }) => {
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'submitting' | 'subscribed' | 'error'>('idle');
+  const [newsletterError, setNewsletterError] = useState('');
+  const topics = ['CBT', 'JAMB', 'CGPA', 'Academics', 'Study Tips', 'Students'];
+  const icons = ['fa-layer-group', 'fa-user-graduate', 'fa-bullseye', 'fa-book', 'fa-lightbulb', 'fa-users'];
+  const count = (topic: string) => posts.filter((post) => post.category.toLowerCase() === topic.toLowerCase() || post.tags?.some((tag) => tag.toLowerCase() === topic.toLowerCase())).length;
+  return <aside className="space-y-4 xl:sticky xl:top-24">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 text-sm font-black"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><i className="far fa-star" /></span>Popular Topics</h2>
+      <div className="grid grid-cols-2 gap-2">
+        {topics.map((topic, index) => <Link key={topic} to="/blog" onClick={(event) => { if (onTopicSelect) { event.preventDefault(); onTopicSelect(topic); } }} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3 hover:border-blue-200 hover:bg-blue-50">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><i className={`fas ${icons[index]}`} /></span>
+          <span><strong className="block text-xs text-slate-900">{topic}</strong><small className="text-[10px] text-slate-500">{count(topic)} articles</small></span>
+        </Link>)}
       </div>
     </section>
-
-    <section>
-      <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-4">Main Tags</p>
-      <div className="flex flex-wrap gap-2">
-        {tags.slice(0, 24).map((tag) => (
-          <button
-            key={tag}
-            type="button"
-            onClick={() => onTagSelect?.(tag)}
-            className={`px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition ${
-              activeTag === tag
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-slate-50 border-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-600'
-            }`}
-          >
-            {tag}
-          </button>
-        ))}
-      </div>
-      {activeTag !== 'All' && onTagSelect && (
-        <button
-          type="button"
-          onClick={() => onTagSelect('All')}
-          className="mt-4 text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800"
-        >
-          Clear tag filter
-        </button>
+    <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-5 shadow-sm">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-200"><i className="far fa-envelope" /></span>
+      <h2 className="mt-4 text-xl font-black leading-tight text-slate-950">Study smarter, every week.</h2>
+      <p className="mt-2 text-xs leading-5 text-slate-500">Get useful study tips, admission updates, academic guides, and new resources delivered to your inbox.</p>
+      {newsletterStatus === 'subscribed' ? (
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-emerald-700">
+          <i className="fas fa-check-circle mt-0.5" />
+          <div><strong className="block text-xs">You're on the list!</strong><span className="text-[10px]">Watch your inbox for the next update.</span></div>
+        </div>
+      ) : (
+        <form className="mt-4 space-y-2" onSubmit={async (event) => {
+          event.preventDefault();
+          const email = newsletterEmail.trim().toLowerCase();
+          if (!email) return;
+          setNewsletterStatus('submitting');
+          setNewsletterError('');
+          try {
+            const response = await fetch('/api/newsletter/subscribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, website: '' }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || 'Unable to subscribe right now.');
+            setNewsletterStatus('subscribed');
+          } catch (error: any) {
+            setNewsletterStatus('error');
+            setNewsletterError(error?.message || 'Unable to subscribe right now.');
+          }
+        }}>
+          <input name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
+          <label htmlFor="blog-newsletter-email" className="sr-only">Email address</label>
+          <input id="blog-newsletter-email" type="email" required autoComplete="email" value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="Enter your email address" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" />
+          <button type="submit" disabled={newsletterStatus === 'submitting'} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:cursor-wait disabled:bg-blue-400">{newsletterStatus === 'submitting' ? 'Subscribing…' : 'Subscribe to Newsletter'} <i className="fas fa-arrow-right ml-2" /></button>
+          {newsletterStatus === 'error' && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-[10px] text-red-600">{newsletterError}</p>}
+        </form>
       )}
+      <p className="mt-3 text-[9px] leading-4 text-slate-400"><i className="fas fa-lock mr-1" />No spam. Unsubscribe whenever you like.</p>
     </section>
-
-    <section className="bg-blue-600 rounded-2xl p-5 text-white">
-      <p className="text-[10px] font-black uppercase tracking-widest text-blue-100 mb-3">Join Community</p>
-      <h2 className="text-xl font-black tracking-tight mb-4">Get updates faster on WhatsApp</h2>
-      <a href={WHATSAPP_COMMUNITY_URL} target="_blank" rel="noopener noreferrer" className="inline-flex px-5 py-3 rounded-2xl bg-white text-blue-600 font-black text-xs uppercase tracking-widest">
-        Join Now
-      </a>
+    <section className="rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 p-6 text-white shadow-xl shadow-blue-100">
+      <div className="flex items-start justify-between"><h2 className="max-w-[210px] text-xl font-black leading-tight">Join our WhatsApp study community</h2><span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-emerald-500"><i className="fab fa-whatsapp text-xl" /></span></div>
+      <p className="mt-4 text-xs leading-5 text-blue-100">Get updates, study tips, resources, and motivation straight to your phone.</p>
+      <a href={WHATSAPP_COMMUNITY_URL} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center rounded-lg bg-white px-5 py-3 text-xs font-black text-blue-600"><i className="fab fa-whatsapp mr-2 text-emerald-500" />Join community</a>
+      <p className="mt-4 text-[10px] text-blue-100">12.4K+ students already joined</p>
     </section>
   </aside>
-);
+};
 
 export default BlogPage;
