@@ -56,7 +56,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
   const [showFundModal, setShowFundModal] = useState(false);
   const [fundAmount, setFundAmount] = useState(300);
   const [courseToUnlock, setCourseToUnlock] = useState<{ examType: string; subject: string } | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [, setIsVerifyingPayment] = useState(false);
+  const [isFundingWallet, setIsFundingWallet] = useState(false);
+  const [isUnlockingCourse, setIsUnlockingCourse] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -227,7 +229,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
 
     const handlePaymentRedirect = async () => {
       try {
-        setIsProcessing(true);
+        setIsVerifyingPayment(true);
         setError("");
         setSuccessMessage("");
 
@@ -301,7 +303,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         }
         // Clear the URL reference too so refreshing doesn't re-trigger the loop
       } finally {
-        setIsProcessing(false);
+        setIsVerifyingPayment(false);
       }
     };
 
@@ -344,7 +346,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
       return;
     }
 
-    setIsProcessing(true);
+    setIsFundingWallet(true);
     setError("");
 
     try {
@@ -352,7 +354,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     } catch (err) {
       console.error("Fund wallet init failed:", err);
       setError("Monnify gateway unavailable. Check your internet connection.");
-      setIsProcessing(false);
+      setIsFundingWallet(false);
     }
   }, [defaultCoursePrice, fundAmount]);
 
@@ -365,7 +367,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     // never make a payment decision based on state that could be 30s stale.
     // The actual deduction in dbService.purchaseCourse is also guarded by a
     // Firestore transaction, but this gives the UI accurate feedback upfront.
-    setIsProcessing(true);
+    setIsUnlockingCourse(true);
     setError("");
 
     let freshBalance = user.walletBalance || 0;
@@ -401,15 +403,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         console.error("Wallet unlock failed:", err);
         setError(err?.message || "Unlock failed. Try again.");
       } finally {
-        setIsProcessing(false);
+        setIsUnlockingCourse(false);
       }
     } else {
       try {
         const currentUser = auth.currentUser;
-        if (!currentUser) { setError("User not logged in."); setIsProcessing(false); return; }
+        if (!currentUser) { setError("User not logged in."); setIsUnlockingCourse(false); return; }
         if (!currentUser.email || currentUser.email.trim() === "") {
           setError("User email not available. Please sign in again.");
-          setIsProcessing(false);
+          setIsUnlockingCourse(false);
           return;
         }
         await paymentService.directCoursePurchase(
@@ -422,7 +424,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
       } catch (err) {
         console.error("Direct purchase init failed:", err);
         setError("Payment initialization failed.");
-        setIsProcessing(false);
+        setIsUnlockingCourse(false);
       }
     }
   }, [courseToUnlock, refreshUser, uid, unlockPrice, user.walletBalance]);
@@ -497,11 +499,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
               </div>
 
               <button
-                disabled={isProcessing}
+                disabled={isFundingWallet}
                 onClick={handleFundWallet}
                 className="w-full bg-[#0047AB] text-white py-5 rounded-2xl font-black text-lg hover:bg-blue-800 transition-all shadow-xl shadow-blue-100 flex items-center justify-center space-x-3 disabled:opacity-50"
               >
-                {isProcessing ? (
+                {isFundingWallet ? (
                   <div className="w-6 h-6 border-4 border-white/30 border-t-white animate-spin rounded-full"></div>
                 ) : (
                   <span>CONTINUE TO PAYMENT</span>
@@ -538,7 +540,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
 
             <div className="flex flex-col gap-3">
               <button
-                disabled={isProcessing}
+                disabled={isUnlockingCourse}
                 onClick={handleUnlockCourse}
                 className={`w-full py-4 rounded-xl font-black text-sm transition shadow-lg ${
                   (user.walletBalance || 0) >= unlockPrice
@@ -546,7 +548,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
                     : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-50"
                 }`}
               >
-                {isProcessing ? "Processing..." : (user.walletBalance || 0) >= unlockPrice ? "PAY WITH WALLET" : "PAY VIA MONNIFY"}
+                {isUnlockingCourse ? "Processing..." : (user.walletBalance || 0) >= unlockPrice ? "PAY WITH WALLET" : "PAY VIA MONNIFY"}
               </button>
 
               <button onClick={() => setCourseToUnlock(null)} className="w-full bg-slate-100 text-slate-600 py-4 rounded-xl font-black text-sm">
