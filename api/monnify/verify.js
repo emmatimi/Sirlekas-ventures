@@ -4,6 +4,7 @@ import { createRequire } from "module";
 const MONNIFY_BASE_URL = process.env.MONNIFY_BASE_URL;
 const require = createRequire(import.meta.url);
 const {
+  initializeAdmin,
   verifyFirebaseUser,
   finalizePaidTransaction,
 } = require("./_payment-admin.cjs");
@@ -138,6 +139,39 @@ export default async function handler(req, res) {
         status: "ERROR",
         error: "Monnify query failed",
         details: monnifyData || monnifyErr.message,
+      });
+    }
+
+    // Firestore is authoritative once our webhook (or a previous verification)
+    // has finalized the transaction. Avoid reporting PENDING for an already
+    // credited wallet when Monnify's query endpoint is briefly stale.
+    const admin = initializeAdmin();
+    const db = admin.firestore();
+    let finalizedTransaction = null;
+
+    if (paymentReference) {
+      const transactionDoc = await db.collection("transactions").doc(paymentReference).get();
+      if (transactionDoc.exists) finalizedTransaction = transactionDoc.data();
+    } else if (monnifyTransactionReference) {
+      const transactionQuery = await db
+        .collection("transactions")
+        .where("monnifyTransactionReference", "==", monnifyTransactionReference)
+        .limit(1)
+        .get();
+      if (!transactionQuery.empty) finalizedTransaction = transactionQuery.docs[0].data();
+    }
+
+    if (
+      finalizedTransaction?.status === "SUCCESS" &&
+      finalizedTransaction?.userId === userId
+    ) {
+      return res.status(200).json({
+        requestSuccessful: true,
+        responseBody: {
+          paymentStatus: "PAID",
+          paymentReference: finalizedTransaction.reference || paymentReference,
+        },
+        source: "firestore",
       });
     }
 

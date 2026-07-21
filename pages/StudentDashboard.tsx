@@ -176,6 +176,28 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
     if (handledPaymentRef.current === paymentReference) return;
     handledPaymentRef.current = paymentReference;
 
+    // Ensure the verification service can use a reference supplied by the
+    // payment redirect even if browser storage was cleared in another tab.
+    if (paymentReferenceFromUrl && storedReference !== paymentReferenceFromUrl) {
+      localStorage.setItem("paymentReference", paymentReferenceFromUrl);
+    }
+
+    const clearPaymentTracking = () => {
+      localStorage.removeItem("paymentReference");
+      localStorage.removeItem("monnifyTransactionReference");
+      setSearchParams({}, { replace: true });
+    };
+
+    const hasSuccessfulTransaction = (candidate: User | null) => {
+      const userTransactions = Array.isArray((candidate as any)?.transactions)
+        ? (candidate as any).transactions
+        : [];
+      return userTransactions.some(
+        (transaction: any) =>
+          transaction?.reference === paymentReference && transaction?.status === "SUCCESS"
+      );
+    };
+
     const verifyWithRetry = async (retries = 6) => {
       for (let i = 0; i < retries; i++) {
         try {
@@ -209,14 +231,42 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         setError("");
         setSuccessMessage("");
 
+        // The webhook often credits the wallet before the browser returns from
+        // Monnify. Reconcile with Firestore first instead of showing a stale
+        // processing warning while the provider query catches up.
+        const beforeVerify = await dbService.getUser(uid);
+        if (hasSuccessfulTransaction(beforeVerify)) {
+          await refreshUser();
+          clearPaymentTracking();
+          setSuccessMessage("Payment successful!");
+          setTimeout(() => setSuccessMessage(""), 8000);
+          return;
+        }
+
         // Small grace period for Monnify to process before first verify call
         await new Promise((r) => setTimeout(r, 4000));
 
         const verify = await verifyWithRetry();
 
         if (!verify?.verified) {
+          const reconciledUser = await dbService.getUser(uid);
+          if (hasSuccessfulTransaction(reconciledUser)) {
+            await refreshUser();
+            clearPaymentTracking();
+            setSuccessMessage("Payment successful!");
+            setTimeout(() => setSuccessMessage(""), 8000);
+            return;
+          }
+
+          // A reference with no matching pending transaction is stale (for
+          // example, an old completed or abandoned checkout). Remove it so it
+          // cannot display the banner again on every dashboard visit.
+          if (reconciledUser?.pendingTransaction?.reference !== paymentReference) {
+            clearPaymentTracking();
+            return;
+          }
+
           setError("Payment is still processing. Please wait or refresh.");
-          setIsProcessing(false);
           return;
         }
 
@@ -232,18 +282,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
         await refreshUser();
 
         // FIX 4: clear BOTH localStorage keys after successful verification
-        localStorage.removeItem("paymentReference");
-        localStorage.removeItem("monnifyTransactionReference");
+        clearPaymentTracking();
 
         setSuccessMessage("Payment successful!");
-        setSearchParams({}, { replace: true });
         setTimeout(() => setSuccessMessage(""), 8000);
       } catch (err: any) {
         console.error("FINAL ERROR:", err);
         // Always clean up localStorage on any terminal outcome so a stale
         // reference never haunts the next page load.
-        localStorage.removeItem("paymentReference");
-        localStorage.removeItem("monnifyTransactionReference");
+        clearPaymentTracking();
         // Give the user a helpful message: distinguish abandoned checkout from
         // a genuine payment failure.
         const msg = err?.message?.toLowerCase() ?? "";
@@ -253,7 +300,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: initialUser }
           setError(err?.message || "Payment could not be confirmed. Please contact support if you were charged.");
         }
         // Clear the URL reference too so refreshing doesn't re-trigger the loop
-        setSearchParams({}, { replace: true });
       } finally {
         setIsProcessing(false);
       }
